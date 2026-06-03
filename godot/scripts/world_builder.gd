@@ -34,6 +34,20 @@ const WP := {
 	"door_eo": Vector3(-2, 0.86, -6.5),
 	"door_sl": Vector3(-6, 0.86, -0.5),
 	"door_lc": Vector3(4, 0.86, 1),
+	# East wing: Server Room (north), Meeting Room (mid), Dormitory (south)
+	"server_c": Vector3(13, 0.86, -6.5),
+	"door_os": Vector3(10, 0.86, -8),
+	"meeting_c": Vector3(13, 0.86, -0.5),
+	"door_cm": Vector3(10, 0.86, 0),
+	"door_sm": Vector3(13, 0.86, -3),
+	"m_s1": Vector3(11.6, 0.86, -1.5),
+	"m_s2": Vector3(14.4, 0.86, -1.5),
+	"m_s3": Vector3(11.6, 0.86, 0.6),
+	"m_s4": Vector3(14.4, 0.86, 0.6),
+	"dorm_c": Vector3(13, 0.86, 3.6),
+	"door_md": Vector3(13, 0.86, 2),
+	"bed1": Vector3(11.5, 0.86, 4.2),
+	"bed2": Vector3(14.5, 0.86, 4.2),
 }
 
 const EDGES := [
@@ -47,6 +61,13 @@ const EDGES := [
 	["cafe_c", "door_oc"], ["cafe_c", "door_lc"],
 	["cafe_c", "cafe_s1"], ["cafe_c", "cafe_s2"],
 	["sec_c", "door_sl"], ["sec_c", "sec_window"],
+	["ops_c", "door_os"], ["door_os", "server_c"],
+	["cafe_c", "door_cm"], ["door_cm", "meeting_c"],
+	["meeting_c", "door_sm"], ["door_sm", "server_c"],
+	["meeting_c", "m_s1"], ["meeting_c", "m_s2"],
+	["meeting_c", "m_s3"], ["meeting_c", "m_s4"],
+	["meeting_c", "door_md"], ["door_md", "dorm_c"],
+	["dorm_c", "bed1"], ["dorm_c", "bed2"],
 ]
 
 const BOARD_COLORS := {
@@ -66,6 +87,7 @@ var _wp_ids := {}
 var _board_slots := {}
 var _board_free: Array[int] = [0, 1, 2, 3, 4, 5]
 # Mission-board card anchor (moves onto the Briefing_Screen when the kit is present).
+var _board_x := 4.75
 var _board_z := -9.91
 var _board_y0 := 2.25
 var _glb_cache := {}
@@ -141,20 +163,27 @@ func _kit_floor(model: String, center: Vector3, w: float, d: float, nx: int, nz:
 func _kit_architecture() -> void:
 	var ws := 0.875  # 4 m kit walls → 3.5 m
 
-	# North wall: solid / glass / solid+display / glass / solid (5 × 4.12 m)
-	var north := ["Wall_Grey", "Wall_Glass_Clear", "Wall_Grey", "Wall_Glass_Clear", "Wall_Grey"]
-	for i in 5:
-		var cx := -10.3 + 4.12 * (i + 0.5)
-		var seg := _kit_scaled(north[i], Vector3(cx, 0, -10.15), 0.0, Vector3(1.03, ws, ws))
+	# North wall, 6 segments over 26.9 m (x -10.3..16.6): glass bays light
+	# ops + cafe; the server room (east end) stays solid.
+	var north := ["Wall_Grey", "Wall_Glass_Clear", "Wall_Grey", "Wall_Glass_Clear", "Wall_Grey", "Wall_Grey"]
+	for i in 6:
+		var cx := -10.3 + 4.483 * (i + 0.5)
+		var seg := _kit_scaled(north[i], Vector3(cx, 0, -10.15), 0.0, Vector3(1.12, ws, ws))
 		if seg and north[i].begins_with("Wall_Glass"):
 			_no_shadow(seg)  # sun shines through the window panels
-	_kit_scaled("Wall_Display_Blue", Vector3(0, 0.35, -9.72), 0.0, Vector3.ONE * ws)
+	_kit_scaled("Wall_Display_Blue", Vector3(0.9, 0.35, -9.72), 0.0, Vector3.ONE * ws)
 
-	# West & east walls (4 × 4.075 m, rotated)
+	# West & far-east perimeter (4 × 4.075 m, rotated)
 	for i in 4:
 		var cz := -10.15 + 4.075 * (i + 0.5)
 		_kit_scaled("Wall_Grey", Vector3(-10.15, 0, cz), 90.0, Vector3(1.019, ws, ws))
-		_kit_scaled("Wall_Grey", Vector3(10.15, 0, cz), -90.0, Vector3(1.019, ws, ws))
+		_kit_scaled("Wall_Grey", Vector3(16.15, 0, cz), -90.0, Vector3(1.019, ws, ws))
+
+	# Wing divider at x=10 with real doorway pieces (ops→server, cafe→meeting)
+	var divider := ["Wall_With_Door_Grey", "Wall_Grey", "Wall_With_Door_Grey", "Wall_Grey"]
+	for i in 4:
+		var cz := -10.0 + 4.0 * (i + 0.5)
+		_kit_scaled(divider[i], Vector3(10.0, 0, cz), 90.0, Vector3(1.0, ws, ws))
 
 	# Inner partitions: railings stretched onto the original segment plan
 	# (door gaps preserved). Railing is 3.92 m long, 1.13 m tall at scale 1.
@@ -167,6 +196,11 @@ func _kit_architecture() -> void:
 	_kit_scaled("Railing_Flat", Vector3(-8, 0, 2), 0.0, Vector3(4.3 / 3.92, 1.06, 1.0))  # sec south
 	for s in [[-1.4, 3.2], [3.9, 4.2]]:                                        # lobby|cafe x=4
 		_kit_scaled("Railing_Flat", Vector3(4, 0, s[0]), 90.0, Vector3(s[1] / 3.92, 1.06, 1.0))
+	# East wing partitions: server|meeting (z=-3) and meeting|dorm (z=2),
+	# each with a center gap at x=13.
+	for s in [[11.1, 2.2], [14.9, 2.2]]:
+		_kit_scaled("Railing_Flat", Vector3(s[0], 0, -3), 0.0, Vector3(s[1] / 3.92, 1.06, 1.0))
+		_kit_scaled("Railing_Flat", Vector3(s[0], 0, 2), 0.0, Vector3(s[1] / 3.92, 1.06, 1.0))
 
 	# Zone floors: calm plain metal everywhere, zone-keyed by a subtle tint.
 	_kit_floor("Floor_Metal_Square", Vector3(-6, 0, -6.5), 7.6, 6.6, 3, 3, Color(1.0, 0.88, 0.7))   # exec warm
@@ -174,6 +208,9 @@ func _kit_architecture() -> void:
 	_kit_floor("Floor_Metal_Square", Vector3(-1, 0, 1.5), 9.6, 8.6, 4, 3)                           # lobby neutral
 	_kit_floor("Floor_Metal_Square", Vector3(7, 0, 1.5), 5.6, 8.6, 3, 4, Color(1.0, 0.76, 0.66))    # cafe warm red
 	_kit_floor("Floor_Metal_Square", Vector3(-8, 0, -0.5), 3.6, 4.6, 2, 2, Color(0.78, 1.0, 0.8))   # sec green
+	_kit_floor("Floor_Metal_Square", Vector3(13, 0, -6.5), 5.6, 6.6, 2, 3, Color(0.7, 0.92, 0.82))  # server teal
+	_kit_floor("Floor_Metal_Square", Vector3(13, 0, -0.5), 5.6, 4.6, 2, 2, Color(0.86, 0.8, 1.0))   # meeting violet
+	_kit_floor("Floor_Metal_Square", Vector3(13, 0, 4), 5.6, 3.6, 2, 1, Color(0.78, 0.82, 0.98))    # dorm dusk
 
 func _ready() -> void:
 	_build_graph()
@@ -230,7 +267,7 @@ func board_set(key: String, state: String, label := "") -> void:
 		var box := CSGBox3D.new()
 		box.size = Vector3(0.5, 0.26, 0.04)
 		add_child(box)
-		box.position = Vector3(4.75 + ((idx % 3) - 1) * 0.6, _board_y0 - float(idx / 3) * 0.4, _board_z)
+		box.position = Vector3(_board_x + ((idx % 3) - 1) * 0.6, _board_y0 - float(idx / 3) * 0.4, _board_z)
 		var lbl := Label3D.new()
 		lbl.text = label if label != "" else key
 		lbl.font_size = 40
@@ -366,10 +403,18 @@ func _build_geometry() -> void:
 
 	# ---- Architecture: kit shell (walls/partitions/floors) or CSG fallback
 	if kit:
-		_box(Vector3(0, -0.1, -2), Vector3(20.6, 0.2, 16.6), _mat(Color(0.12, 0.13, 0.16), 0.5))
+		_box(Vector3(3, -0.1, -2), Vector3(26.6, 0.2, 16.6), _mat(Color(0.12, 0.13, 0.16), 0.5))
 		_kit_architecture()
 	else:
-		_box(Vector3(0, -0.1, -2), Vector3(20.6, 0.2, 16.6), planks)
+		_box(Vector3(3, -0.1, -2), Vector3(26.6, 0.2, 16.6), planks)
+		# Minimal CSG shell for the east wing (kit does it properly)
+		_box(Vector3(16.15, 1.75, -2), Vector3(0.3, 3.5, 16.3), wall)
+		_box(Vector3(10, 1.75, -9.4), Vector3(0.3, 3.5, 1.2), wall)
+		_box(Vector3(10, 1.75, -4), Vector3(0.3, 3.5, 6.4), wall)
+		_box(Vector3(10, 1.75, 3.4), Vector3(0.3, 3.5, 5.2), wall)
+		_rug(Vector3(13, 0, -6.5), Vector3(4.6, 0, 5.6), Color(0.12, 0.22, 0.18))
+		_rug(Vector3(13, 0, -0.5), Vector3(4.6, 0, 3.6), Color(0.2, 0.16, 0.26))
+		_rug(Vector3(13, 0, 4), Vector3(4.6, 0, 2.6), Color(0.16, 0.17, 0.26))
 		_rug(Vector3(-6, 0, -6.5), Vector3(6.6, 0, 5.6), Color(0.3, 0.22, 0.12))
 		_rug(Vector3(4, 0, -6.5), Vector3(10.6, 0, 5.6), Color(0.14, 0.18, 0.28))
 		_rug(Vector3(7, 0, 1.5), Vector3(4.6, 0, 7.6), Color(0.3, 0.18, 0.1))
@@ -418,13 +463,13 @@ func _build_geometry() -> void:
 			_box(Vector3(bx + bw / 2.0, bh * 0.6, -11.3), Vector3(bw * 0.4, 0.18, 0.05),
 				_mat(Color(0.9, 0.8, 0.5), 0.5, Color(1, 0.85, 0.5), 1.2), 0)
 		bx += bw + bldg_rng.randf_range(0.3, 1.0)
-	_box(Vector3(0, 3.7, -2), Vector3(20.6, 0.2, 16.6), wall, 3)
+	_box(Vector3(3, 3.7, -2), Vector3(26.6, 0.2, 16.6), wall, 3)
 
 	# ---- Executive Office
 	if kit:
 		_kit("Command_Console", Vector3(-6, 0, -8.4), 0.0, 0.5)   # the command station
 		_kit("Orrery", Vector3(-8.6, 0, -4.2), 0.0, 0.35)
-		_kit("Large_Monitor_Blue", Vector3(-4.75, 0, -9.55), 0.0, 0.5)
+		_kit("Large_Monitor_Blue", Vector3(-8.06, 0, -9.55), 0.0, 0.5)
 	else:
 		_box(Vector3(-6, 0.42, -8.3), Vector3(2.6, 0.84, 1.1), dark_wood)
 		_box(Vector3(-6, 0.88, -8.3), Vector3(2.9, 0.08, 1.3), wood)
@@ -461,12 +506,13 @@ func _build_geometry() -> void:
 	_pendant(Vector3(3, 0, -5.5), Color(0.8, 0.88, 1.0))
 	_omni(Vector3(3, 2.8, -6.5), Color(0.7, 0.8, 1.0), 1.8, 11.0)
 
-	# ---- Mission Control board
+	# ---- Mission Control board (solid north segment, clear of the glass bays)
 	if kit:
-		_kit("Briefing_Screen_Blue", Vector3(4.75, 0, -9.45), 0.0, 0.6)
+		_kit("Briefing_Screen_Blue", Vector3(9.0, 0, -9.45), 0.0, 0.6)
+		_board_x = 9.0
 		_board_z = -9.0
 		_board_y0 = 1.5
-		var title := _label("MISSION CONTROL", Vector3(4.75, 2.15, -9.0), 44, Color(0.6, 0.85, 1.0))
+		var title := _label("MISSION CONTROL", Vector3(9.0, 2.15, -9.0), 44, Color(0.6, 0.85, 1.0))
 		title.pixel_size = 0.0035
 	else:
 		_box(Vector3(4.75, 2.05, -9.96), Vector3(1.9, 1.3, 0.05), _mat(Color(0.08, 0.09, 0.12), 0.3))
@@ -495,12 +541,12 @@ func _build_geometry() -> void:
 	_box(Vector3(-3.95, 0.7, 1.0), Vector3(0.18, 0.9, 0.8), _mat(Color(0.2, 0.26, 0.34)))
 	_omni(Vector3(-1, 2.6, 2), Color(1.0, 0.78, 0.55), 2.2, 11.0)
 
-	# ---- Cafeteria
-	_box(Vector3(9.55, 0.5, -0.5), Vector3(0.9, 1.0, 3.0), dark_wood)
-	_box(Vector3(9.55, 1.02, -0.5), Vector3(1.05, 0.06, 3.2), wood)
-	_box(Vector3(9.45, 1.32, -1.2), Vector3(0.4, 0.55, 0.4), _mat(Color(0.1, 0.1, 0.12), 0.35))
-	_box(Vector3(9.3, 1.35, -1.0), Vector3(0.06, 0.1, 0.1), amber)             # machine light
-	_box(Vector3(9.9, 2.1, -0.2), Vector3(0.05, 0.9, 1.6), amber)              # menu board
+	# ---- Cafeteria (counter shifted off the new meeting-room doorway path)
+	_box(Vector3(9.2, 0.5, -1.7), Vector3(0.9, 1.0, 2.2), dark_wood)
+	_box(Vector3(9.2, 1.02, -1.7), Vector3(1.05, 0.06, 2.4), wood)
+	_box(Vector3(9.1, 1.32, -2.2), Vector3(0.4, 0.55, 0.4), _mat(Color(0.1, 0.1, 0.12), 0.35))
+	_box(Vector3(8.95, 1.35, -2.0), Vector3(0.06, 0.1, 0.1), amber)            # machine light
+	_box(Vector3(9.6, 2.1, -1.5), Vector3(0.05, 0.9, 1.6), amber)              # menu board
 	for tp in [Vector3(6.5, 0, 1.5), Vector3(8.2, 0, 3.5)]:
 		if kit:
 			_kit("Cafeteria_Table", tp, 0.0, 0.8)
@@ -516,10 +562,42 @@ func _build_geometry() -> void:
 			_cyl(Vector3(tp.x + 0.55, 0.22, tp.z + 0.55), 0.16, 0.44, dark_wood)
 			_cyl(Vector3(tp.x - 0.55, 0.22, tp.z - 0.55), 0.16, 0.44, dark_wood)
 	if kit:
-		_kit("Lava_Lamp", Vector3(9.5, 1.05, 0.4), 0.0, 1.0)
+		_kit("Lava_Lamp", Vector3(9.15, 1.05, -0.9), 0.0, 1.0)
 	_pendant(Vector3(6.5, 0, 1.5), Color(1.0, 0.72, 0.45))
 	_pendant(Vector3(8.2, 0, 3.5), Color(1.0, 0.72, 0.45))
 	_omni(Vector3(7, 2.4, 1), Color(1.0, 0.7, 0.45), 2.2, 10.0)
+	# ---- Server Room (infra made physical)
+	if kit:
+		_kit("Generator", Vector3(13.4, 0, -7.5), 25.0, 0.55)
+		_kit("Generator_Pile_Chonky", Vector3(11.2, 0, -8.6), 0.0, 0.45)
+		_kit("Generator_Pile_Small", Vector3(15.3, 0, -8.8), 0.0, 0.5)
+		_kit("Battery_Green", Vector3(15.4, 0, -5.0), 90.0, 0.8)
+		_kit("Battery_Blue", Vector3(15.4, 0, -4.2), 90.0, 0.8)
+		_kit_scaled("Wall_Display_Green", Vector3(14.34, 0.35, -9.72), 0.0, Vector3.ONE * 0.875)
+		var hz := _kit_scaled("Hazard_Floor_1", Vector3(13.2, 0.02, -7.2), 0.0, Vector3(0.9, 1.0, 0.9))
+		if hz:
+			pass
+	_omni(Vector3(13, 2.5, -6.5), Color(0.5, 1.0, 0.7), 1.6, 7.0)
+
+	# ---- Meeting Room (A2A collaboration stage)
+	if kit:
+		_kit("Octo_Table", Vector3(13, 0, -0.45), 0.0, 0.45)
+		_kit("Chair_1", Vector3(11.8, 0, -1.35), 135.0, 0.6)
+		_kit("Chair_1", Vector3(14.2, 0, -1.35), -135.0, 0.6)
+		_kit("Chair_1", Vector3(11.8, 0, 0.45), 45.0, 0.6)
+		_kit("Chair_1", Vector3(14.2, 0, 0.45), -45.0, 0.6)
+		_kit("Briefing_Screen_Purple", Vector3(15.5, 0, -0.5), -90.0, 0.5)
+	_omni(Vector3(13, 2.5, -0.5), Color(0.85, 0.8, 1.0), 1.6, 6.0)
+
+	# ---- Dormitory (offline agents sleep here)
+	if kit:
+		_kit("Bunk_Single_Blue", Vector3(11.5, 0, 5.1), 0.0, 0.7)
+		_kit("Bunk_Single_Red", Vector3(14.5, 0, 5.1), 0.0, 0.7)
+		_kit("Cryo_Tube_ON", Vector3(15.6, 0, 2.9), 0.0, 0.45)
+		_kit("Floor_Lamp", Vector3(10.8, 0, 5.4), 0.0, 0.9)
+		_kit("Plant_1", Vector3(10.7, 0, 2.6), 120.0, 1.7)
+	_omni(Vector3(13, 2.2, 4.2), Color(1.0, 0.75, 0.5), 1.1, 5.0)
+
 	# Coffee steam
 	var steam := GPUParticles3D.new()
 	steam.amount = 14
@@ -570,16 +648,16 @@ func _build_geometry() -> void:
 
 	# ---- Atmosphere: room fog + god-ray cards + dust
 	var fog := FogVolume.new()
-	fog.size = Vector3(20, 3.5, 16)
+	fog.size = Vector3(26, 3.5, 16)
 	var fm := FogMaterial.new()
 	fm.density = 0.035
 	fm.albedo = Color(0.85, 0.9, 1.0)
 	fog.material = fm
 	add_child(fog)
-	fog.position = Vector3(0, 1.75, -2)
+	fog.position = Vector3(3, 1.75, -2)
 
 	# God-ray cards anchored to the window slots (kit shell: two big glass bays)
-	for wx in ([-4.12, 4.12] if kit else [-7.0, -2.5, 2.5, 7.0]):
+	for wx in ([-3.58, 5.39] if kit else [-7.0, -2.5, 2.5, 7.0]):
 		var quad := QuadMesh.new()
 		quad.size = Vector2(3.2 if kit else 2.3, 5.0)
 		var bm := ShaderMaterial.new()

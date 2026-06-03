@@ -34,7 +34,7 @@ Not a dashboard. Not a chat window. A **world** that renders the true state of y
 ### 🖥️ Live wallpaper world (Layer 1 — Godot 4)
 - Renders **behind your desktop icons** (WorkerW technique, same as Wallpaper Engine)
 - HD-2D look: 3D office + billboarded pixel-art sprites lit by the 3D scene, volumetric god rays, bloom, tilt-shift DOF, film grain
-- **5 zones**: Executive Office, Operations Floor, Lobby, Cafeteria, Security Center
+- **8 zones**: Executive Office, Operations Floor, Lobby, Cafeteria, Security Center, **Meeting Room** (agents physically gather for collaborations), **Server Room** (generator = infra), **Dormitory** (offline agents walk to a bunk and sleep — they never just vanish)
 - Agents **walk** between zones on an A* waypoint graph with **4-direction animated spritesheets** (idle + walk); facing follows actual movement
 - **Custom Character system**: composites layered sheets (hair/head/eyes/torso/shirt/legs) with per-agent tints — the Main Agent gets a unique look; NPCs draw from 12 premade sheets by agent-id hash; falls back to runtime-generated procedural sprites when art assets are absent
 - **Real-time day/night cycle** — sun angle, color, sky and god rays follow your machine's clock; at night the city skyline outside lights up
@@ -235,7 +235,8 @@ One JSON event per WebSocket message / journal line: `{type, agent, task?, tool?
 
 | Type | Meaning | World reaction |
 |---|---|---|
-| `agent.online` / `agent.offline` | agent joins / leaves | walks in via lobby / walks out & despawns |
+| `agent.online` / `agent.offline` | agent joins / goes offline | walks in via lobby / walks to a dormitory bunk and sleeps |
+| `collab.started` / `collab.ended` (`agents[]`) | multi-agent session | participants gather around the meeting-room table, then return to work |
 | `task.started` | mission begins | takes a desk, board card → running (cyan) |
 | `task.progress` (`tool`) | tool call | tool name floats above the character |
 | `task.completed` / `task.failed` | mission ends | "done ✓"/"failed ✗", card green/red, returns to cafeteria |
@@ -263,9 +264,9 @@ The `docs/` folder is a complete V1 product-design specification written before 
 - [x] Character art — Schwarnhild spritesheets + custom-character compositor (procedural fallback kept)
 - [x] Environment furniture — Molten Maps sci-fi 3D models (consoles, monitors, briefing screen, cafeteria…)
 - [x] Full kit shell — walls (solid + glass window bays), railing partitions, zone-tinted metal floors
+- [x] Meeting Room choreography, Server Room, Dormitory (east wing)
 - [ ] Replay Theater — scrub & re-enact any past mission from the journal
-- [ ] Meeting-room choreography for multi-agent collaboration
-- [ ] More zones (Research Lab, Dev Studio, Dormitory, Archive Library…)
+- [ ] More zones (Research Lab, Dev Studio, Archive Library…)
 - [ ] Permission policies (always-allow rules, per-agent keycards)
 - [ ] Voice (push-to-talk, wake word)
 - [ ] Tauri packaging, macOS/Linux wallpaper backends

@@ -11,6 +11,8 @@ const AgentScript := preload("res://scripts/agent_sprite.gd")
 var agents := {}  # id -> {node, state, desk, id, tasks: {task_id: true}}
 var desk_pool: Array[String] = ["desk1", "desk2", "desk3", "desk4"]
 var seat_cycle: Array[String] = ["cafe_s1", "cafe_s2", "cafe_c"]
+var meeting_cycle: Array[String] = ["m_s1", "m_s2", "m_s3", "m_s4"]
+var bed_pool: Array[String] = ["bed1", "bed2"]
 var ceo: Sprite3D
 
 func _ready() -> void:
@@ -22,13 +24,26 @@ func set_connected(connected: bool) -> void:
 # ---------------------------------------------------------------- events
 
 func handle(evt: Dictionary) -> void:
-	var id := str(evt.get("agent", "agent"))
 	var type := str(evt.get("type", ""))
+	# Collaboration events may target several agents at once.
+	if type in ["collab.started", "collab.ended"] and evt.has("agents"):
+		for member in evt.agents:
+			var sub := evt.duplicate()
+			sub.erase("agents")
+			sub["agent"] = str(member)
+			handle(sub)
+		return
+
+	var id := str(evt.get("agent", "agent"))
 	var task := str(evt.get("task", id))  # agent-as-task fallback (tier-1 adapters)
 	if type == "agent.offline":
-		_despawn(id)
+		_to_dorm(id)
 		return
 	var a: Dictionary = _ensure(id)
+	if a.state == "offline":
+		a.state = "idle"
+		a.node.set_status("good morning ☀")
+		_clear_status_later(a, 3.0)
 	match type:
 		"agent.online":
 			pass  # _ensure already spawned them
@@ -76,6 +91,21 @@ func handle(evt: Dictionary) -> void:
 			# Speech bubble: first line of what the agent actually said.
 			var text := str(evt.get("text", "")).split("\n")[0]
 			a.node.set_status("💬 " + text.left(28))
+		"collab.started":
+			# Agents physically gather at the meeting table (design doc 4.7).
+			a.state = "meeting"
+			a.node.set_status("meeting 🗣")
+			var seat: String = meeting_cycle.pop_front()
+			meeting_cycle.append(seat)
+			_walk(a.node, seat)
+		"collab.ended":
+			if a.tasks.is_empty():
+				_finish(a, "done ✓")
+			else:
+				a.state = "working"
+				a.node.set_status("working…")
+				if a.desk != "":
+					_walk(a.node, a.desk)
 
 # ---------------------------------------------------------------- agents
 
@@ -94,18 +124,22 @@ func _ensure(id: String) -> Dictionary:
 	_clear_status_later(a, 5.0)
 	return a
 
-func _despawn(id: String) -> void:
+## Offline agents don't vanish — they walk to the dormitory and sleep
+## (design doc: the dorm IS the offline state, visible and honest).
+func _to_dorm(id: String) -> void:
 	if not agents.has(id):
 		return
 	var a: Dictionary = agents[id]
 	_release_desk(a)
 	for t in a.tasks:
 		world.board_set(t, "none")
-	agents.erase(id)
+	a.tasks.clear()
+	a.state = "offline"
 	a.node.set_status("offline 💤")
-	var dur: float = _walk(a.node, "spawn")
-	await get_tree().create_timer(dur + 0.5).timeout
-	a.node.queue_free()
+	var bed: String = bed_pool.pop_front() if bed_pool.size() > 0 else "dorm_c"
+	if bed != "dorm_c":
+		bed_pool.append(bed)  # cycle: bunks are shared
+	_walk(a.node, bed)
 
 func _to_desk(a: Dictionary) -> void:
 	if a.desk == "":
