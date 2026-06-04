@@ -40,19 +40,20 @@
 
   /* ---------- header ---------- */
   header {
-    display: flex; align-items: center; gap: 9px; flex: none;
-    padding: 8px 14px; border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; gap: 8px; flex: none;
+    padding: 8px 12px; border-bottom: 1px solid var(--line);
     background: var(--glass); backdrop-filter: blur(12px);
-    font-weight: 600; font-size: 13px; letter-spacing: 1.5px;
+    font-weight: 600; font-size: 13px; letter-spacing: 1.2px;
+    overflow: hidden;
   }
   header .logo { color: var(--accent); }
   #conn { width: 8px; height: 8px; border-radius: 50%; background: #ff5448; flex: none; }
   #conn.on { background: #4ade80; box-shadow: 0 0 8px #4ade8088; }
   #theater { display: none; color: #ff5448; font-weight: 700; font-size: 12px; }
   header button {
-    margin-left: auto; font-size: 11.5px; padding: 4px 10px; cursor: pointer;
+    margin-left: auto; font-size: 12px; padding: 4px 7px; cursor: pointer;
     color: var(--accent); background: rgba(255,255,255,0.05);
-    border: 1px solid var(--line); border-radius: 8px;
+    border: 1px solid var(--line); border-radius: 8px; flex: none;
   }
   header button:hover { background: rgba(94,200,255,0.15); }
 
@@ -342,7 +343,7 @@
   <span class="logo">BAGIDEA</span> OFFICE
   <span id="conn"></span>
   <span id="theater">⏪ REPLAY</span>
-  <button id="replayBtn" title="Re-enact the last 15 minutes in the office">⏪ Replay</button>
+  <button id="replayBtn" title="Replay — re-enact the last 15 minutes in the office">⏪</button>
   <button id="discussBtn" title="Let agents discuss together" style="margin-left:6px">🗣</button>
   <button id="mapBtn" title="Top-down office map" style="margin-left:6px">🗺</button>
   <button id="dayBtn" title="World atmosphere" style="margin-left:6px">🌗</button>
