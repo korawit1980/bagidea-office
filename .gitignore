@@ -24,3 +24,4 @@ _assets_tmp/
 # Third-party asset archives
 *.rar
 *.7z
+godot/assets/env/

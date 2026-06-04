@@ -178,6 +178,16 @@ godot/assets/characters/
 godot/assets/scifi/   ← all .glb files from the pack's Assets/gtlf folder
 ```
 
+**Countryside** — a low-poly environment pack (mountains/trees/rocks/bushes,
+FBX, loaded at runtime via FBXDocument):
+
+```
+godot/assets/env/     ← Mounting_*.fbx, Tree_*.fbx, Rock_*.fbx, Bush_*.fbx, …
+```
+
+Without it the meadow keeps procedural placeholder mountains and pines; the
+wind-swaying grass field is always procedural (shader-driven).
+
 Used for consoles, monitors, the briefing screen (mission board), cafeteria
 furniture, plants, lamps, the orrery and more — loaded via `GLTFDocument`
 with measured per-prop scaling.

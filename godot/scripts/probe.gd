@@ -1,24 +1,36 @@
 extends SceneTree
-## Dev probe: prints the real AABB of kit models so placement math is
-## measured, not guessed. Run:
+## Dev probe: prints the real AABB of asset models (glb via GLTFDocument,
+## fbx via FBXDocument) so placement math is measured, not guessed. Run:
 ##   godot --headless --path godot --script res://scripts/probe.gd
 
 const MODELS := [
-	"Hydroponics_Full", "Hydroponics_Empty", "Hydroponics_Lamp",
-	"Hydroponic_Bay", "Large_Monitor_White", "Lava_Lamp", "End_Table",
+	"res://assets/env/Mounting_1.fbx", "res://assets/env/Mounting_2.fbx",
+	"res://assets/env/Mounting_3.fbx", "res://assets/env/Tree_1.fbx",
+	"res://assets/env/Tree_2.fbx", "res://assets/env/Tree_3.fbx",
+	"res://assets/env/Rock_1.fbx", "res://assets/env/Bush_1.fbx",
+	"res://assets/env/Grass_1.fbx", "res://assets/env/Terrain_1.fbx",
+	"res://assets/env/Plant_1.fbx", "res://assets/env/Log_1.fbx",
 ]
 
 func _init() -> void:
-	for name in MODELS:
-		var doc := GLTFDocument.new()
-		var state := GLTFState.new()
-		var path := ProjectSettings.globalize_path("res://assets/scifi/%s.glb" % name)
-		if doc.append_from_file(path, state) != OK:
-			print(name, "  LOAD FAILED")
+	for path in MODELS:
+		var scene: Node = null
+		var abs := ProjectSettings.globalize_path(path)
+		if path.ends_with(".fbx"):
+			var doc := FBXDocument.new()
+			var state := FBXState.new()
+			if doc.append_from_file(abs, state) == OK:
+				scene = doc.generate_scene(state)
+		else:
+			var doc := GLTFDocument.new()
+			var state := GLTFState.new()
+			if doc.append_from_file(abs, state) == OK:
+				scene = doc.generate_scene(state)
+		if scene == null:
+			print(path.get_file(), "  LOAD FAILED")
 			continue
-		var scene := doc.generate_scene(state)
 		var aabb := _merge_aabb(scene, Transform3D.IDENTITY)
-		print("%s  size=%v  origin=%v" % [name, aabb.size, aabb.position])
+		print("%s  size=%v  origin=%v" % [path.get_file(), aabb.size, aabb.position])
 		scene.free()
 	quit()
 

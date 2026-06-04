@@ -132,6 +132,31 @@ func _kit_available() -> bool:
 func _kit(model: String, pos: Vector3, rot_y := 0.0, s := 1.0) -> Node3D:
 	return _kit_scaled(model, pos, rot_y, Vector3.ONE * s)
 
+# ------------------------------------------------- environment model pack
+
+const ENV_DIR := "res://assets/env/"
+
+func _env_available() -> bool:
+	return FileAccess.file_exists(ProjectSettings.globalize_path(ENV_DIR + "Tree_1.fbx"))
+
+## Low-poly environment FBX (user-provided pack), runtime-loaded + cached.
+func _env(model: String, pos: Vector3, rot_y := 0.0, s := 1.0) -> Node3D:
+	var key := "env:" + model
+	if not _glb_cache.has(key):
+		var doc := FBXDocument.new()
+		var state := FBXState.new()
+		var path := ProjectSettings.globalize_path(ENV_DIR + model + ".fbx")
+		_glb_cache[key] = doc.generate_scene(state) if doc.append_from_file(path, state) == OK else null
+	var proto: Node3D = _glb_cache[key]
+	if proto == null:
+		return null
+	var inst: Node3D = proto.duplicate()
+	add_child(inst)
+	inst.position = pos
+	inst.rotation_degrees = Vector3(0, rot_y, 0)
+	inst.scale = Vector3.ONE * s
+	return inst
+
 func _kit_scaled(model: String, pos: Vector3, rot_y: float, s: Vector3) -> Node3D:
 	if not _glb_cache.has(model):
 		var doc := GLTFDocument.new()
@@ -876,68 +901,75 @@ func _build_countryside() -> void:
 	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(mmi)
 
-	# Mountain range behind the office (north).
-	var rock := _mat(Color(0.32, 0.4, 0.45), 0.95)
-	var rock_far := _mat(Color(0.42, 0.5, 0.6), 1.0)
-	var snow := _mat(Color(0.92, 0.95, 1.0), 0.8)
-	for m in [
-		[Vector3(-18, 0, -26), 14.0, 16.0, false], [Vector3(-2, 0, -30), 18.0, 22.0, true],
-		[Vector3(16, 0, -27), 15.0, 18.0, true], [Vector3(30, 0, -24), 11.0, 13.0, false],
-		[Vector3(-32, 0, -22), 10.0, 12.0, false], [Vector3(7, 0, -24), 9.0, 11.0, false],
-	]:
-		var peak := CSGCylinder3D.new()
-		peak.cone = true
-		peak.radius = m[1]
-		peak.height = m[2]
-		peak.sides = 7
-		peak.material = rock_far if m[0].z < -27.0 else rock
-		add_child(peak)
-		peak.position = m[0] + Vector3(0, m[2] * 0.5 - 0.2, 0)
-		if m[3]:
-			var cap := CSGCylinder3D.new()
-			cap.cone = true
-			cap.radius = m[1] * 0.28
-			cap.height = m[2] * 0.3
-			cap.sides = 7
-			cap.material = snow
-			add_child(cap)
-			cap.position = m[0] + Vector3(0, m[2] - cap.height * 0.5 - 0.1, 0)
-
-	# Rolling hills (squashed spheres) at the mountain feet.
-	var hill := _mat(Color(0.18, 0.4, 0.16), 0.95)
-	for hpos in [Vector3(-26, 0, -17), Vector3(8, 0, -18), Vector3(26, 0, -16), Vector3(38, 0, -12)]:
-		var h := CSGSphere3D.new()
-		h.radius = 6.0
-		h.material = hill
-		add_child(h)
-		h.position = hpos
-		h.scale = Vector3(1.6, 0.35, 1.1)
-
-	# Low-poly pines scattered on the meadow (clear of the camera's view path).
-	var trunk_mat := _mat(Color(0.3, 0.2, 0.12), 0.9)
-	var leaf_mat := _mat(Color(0.12, 0.32, 0.12), 0.9)
-	for tp in [
+	var tree_spots: Array = [
 		Vector3(-20, 0, -13), Vector3(-26, 0, -10), Vector3(-16, 0, -16), Vector3(-30, 0, -4),
 		Vector3(22, 0, -14), Vector3(28, 0, -9), Vector3(34, 0, -16), Vector3(21, 0, -11),
 		Vector3(-24, 0, 4), Vector3(-28, 0, 12), Vector3(-19, 0, 18), Vector3(-26, 0, 24),
 		Vector3(24, 0, 6), Vector3(30, 0, 14), Vector3(22, 0, 22), Vector3(36, 0, 2),
 		Vector3(-14, 0, 28), Vector3(12, 0, 30), Vector3(30, 0, 27),
-	]:
-		var s := 0.8 + fmod(absf(tp.x * 3.7 + tp.z * 1.3), 1.0) * 0.8
-		var trunk := CSGCylinder3D.new()
-		trunk.radius = 0.16 * s
-		trunk.height = 0.9 * s
-		trunk.material = trunk_mat
-		add_child(trunk)
-		trunk.position = tp + Vector3(0, 0.45 * s, 0)
-		var leaf := CSGCylinder3D.new()
-		leaf.cone = true
-		leaf.radius = 0.95 * s
-		leaf.height = 2.4 * s
-		leaf.sides = 6
-		leaf.material = leaf_mat
-		add_child(leaf)
-		leaf.position = tp + Vector3(0, 0.9 * s + 1.2 * s, 0)
+	]
+
+	if _env_available():
+		# Real low-poly pack: mountain range, trees, bushes, rocks, logs.
+		_env("Mounting_3", Vector3(2, 0, -27), 0.0, 1.4)
+		_env("Mounting_2", Vector3(-22, 0, -24), 20.0, 1.2)
+		_env("Mounting_1", Vector3(24, 0, -25), -15.0, 1.3)
+		_env("Mounting_1", Vector3(-38, 0, -18), 40.0, 0.9)
+		_env("Mounting_2", Vector3(40, 0, -18), 70.0, 0.8)
+		for i in tree_spots.size():
+			var tp: Vector3 = tree_spots[i]
+			var kind := "Tree_%d" % (1 + i % 3)
+			var ts := 0.45 + fmod(absf(tp.x * 3.7 + tp.z * 1.3), 1.0) * 0.35
+			_env(kind, tp, fmod(tp.x * 53.0, 360.0), ts)
+		for i in 10:
+			var bp := Vector3(-32.0 + fmod(i * 13.7, 66.0), 0, 16.0 + fmod(i * 7.3, 14.0))
+			if bp.x > -12.0 and bp.x < 18.0 and bp.z < 14.5:
+				continue
+			_env("Bush_%d" % (1 + i % 3), bp, i * 71.0, 0.8)
+		for r in [[Vector3(-15, 0, 16), 1], [Vector3(19, 0, 17), 3], [Vector3(-13, 0, -14), 5],
+				[Vector3(19.5, 0, -13), 2], [Vector3(-33, 0, 8), 4], [Vector3(38, 0, 10), 6]]:
+			_env("Rock_%d" % r[1], r[0], r[1] * 47.0, 1.1)
+		_env("Log_1", Vector3(-17, 0, 22), 30.0, 0.9)
+		_env("Log_2", Vector3(26, 0, 19), -50.0, 0.9)
+		for i in 26:
+			var gp := Vector3(-30.0 + fmod(i * 11.3, 64.0), 0, -16.0 + fmod(i * 17.9, 46.0))
+			if gp.x > -12.0 and gp.x < 18.0 and gp.z > -12.0 and gp.z < 14.5:
+				continue
+			_env("Grass_%d" % (1 + i % 2), gp, i * 31.0, 1.3)
+	else:
+		# Procedural fallback so clones without the pack still get a horizon.
+		var rock := _mat(Color(0.32, 0.4, 0.45), 0.95)
+		var snow := _mat(Color(0.92, 0.95, 1.0), 0.8)
+		for m in [
+			[Vector3(-18, 0, -26), 14.0, 16.0], [Vector3(-2, 0, -30), 18.0, 22.0],
+			[Vector3(16, 0, -27), 15.0, 18.0], [Vector3(30, 0, -24), 11.0, 13.0],
+		]:
+			var peak := CSGCylinder3D.new()
+			peak.cone = true
+			peak.radius = m[1]
+			peak.height = m[2]
+			peak.sides = 7
+			peak.material = rock
+			add_child(peak)
+			peak.position = m[0] + Vector3(0, m[2] * 0.5 - 0.2, 0)
+		var trunk_mat := _mat(Color(0.3, 0.2, 0.12), 0.9)
+		var leaf_mat := _mat(Color(0.12, 0.32, 0.12), 0.9)
+		for tp in tree_spots:
+			var s := 0.8 + fmod(absf(tp.x * 3.7 + tp.z * 1.3), 1.0) * 0.8
+			var trunk := CSGCylinder3D.new()
+			trunk.radius = 0.16 * s
+			trunk.height = 0.9 * s
+			trunk.material = trunk_mat
+			add_child(trunk)
+			trunk.position = tp + Vector3(0, 0.45 * s, 0)
+			var leaf := CSGCylinder3D.new()
+			leaf.cone = true
+			leaf.radius = 0.95 * s
+			leaf.height = 2.4 * s
+			leaf.sides = 6
+			leaf.material = leaf_mat
+			add_child(leaf)
+			leaf.position = tp + Vector3(0, 2.1 * s, 0)
 
 func _plant(pos: Vector3) -> void:
 	var pot := CSGCylinder3D.new()
