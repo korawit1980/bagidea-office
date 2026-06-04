@@ -18,11 +18,13 @@ const DAY_KEYS := [
 
 var _day_timer := 0.0
 var _hour_override := -1.0
+var _cli_pinned := false  # --hour=N beats replayed ui.daylight events
 
 func _ready() -> void:
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--hour="):
 			_hour_override = float(arg.split("=")[1])
+			_cli_pinned = true
 	$Sun.rotation_degrees = Vector3(-46.0, 150.0, 0.0)
 	_apply_daylight()
 
@@ -62,6 +64,8 @@ func _ready() -> void:
 ## Manual atmosphere from the overlay: {"hour": 17.5} pins the clock for
 ## debugging/beauty shots; {"hour": "auto"} hands it back to real time.
 func apply_daylight_event(evt: Dictionary) -> void:
+	if _cli_pinned:
+		return
 	var h: Variant = evt.get("hour", "auto")
 	_hour_override = float(h) if (h is float or h is int) else -1.0
 	_apply_daylight()
@@ -105,6 +109,17 @@ func _apply_daylight() -> void:
 		sm.sky_horizon_color = sky_col.lightened(0.25)
 		sm.ground_horizon_color = sky_col * Color(0.75, 0.8, 0.7)
 	var world: Node3D = $World
+	# Roofline clock + phase icon + the day/night particle shift.
+	var phase := "day"
+	if hour < 6.0 or hour >= 18.5:
+		phase = "night"
+	elif hour < 9.0:
+		phase = "dawn"
+	elif hour >= 16.5:
+		phase = "dusk"
+	var mins := int(round(fmod(hour, 1.0) * 60.0)) % 60
+	world.update_clock("%02d:%02d" % [int(hour) % 24, mins], phase)
+	world.set_night_life(phase == "night")
 	if world.sky_mat:
 		world.sky_mat.emission = sky_col
 		world.sky_mat.albedo_color = sky_col

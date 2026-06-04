@@ -218,15 +218,17 @@ func _apply_roster(evt: Dictionary) -> void:
 	for id in list:
 		var r: Dictionary = list[id]
 		roster[id] = {"name": str(r.get("name", id)), "role": str(r.get("role", "Staff")),
-			"avatar": int(r.get("avatar", 1))}
+			"avatar": int(r.get("avatar", 1)), "aura": str(r.get("aura", ""))}
 	for id in roster:
 		if id == "ceo":
 			if is_instance_valid(ceo):
 				ceo.apply_identity(roster[id].name, roster[id].role, roster[id].avatar)
+				ceo.set_aura(roster[id].aura)
 			continue
 		var a: Dictionary = _ensure(id)
 		a.registered = true
 		a.node.apply_identity(roster[id].name, roster[id].role, roster[id].avatar)
+		a.node.set_aura(roster[id].aura)
 		a.node.set_state(a.state)
 	# Registry agents deleted while this renderer was away.
 	for id in agents.keys().duplicate():

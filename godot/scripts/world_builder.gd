@@ -282,6 +282,261 @@ func _kit_architecture() -> void:
 func _ready() -> void:
 	_build_graph()
 	_build_geometry()
+	_build_sky_life()
+	_build_ambient_particles()
+	_build_clock()
+	_bird_loop()
+
+# ---------------------------------------------------------------- ambient life
+
+const BirdScript := preload("res://scripts/bird_sprite.gd")
+
+## Soft clouds drifting across the sky forever + occasional bird flocks.
+func _build_sky_life() -> void:
+	# Shaded (not unshaded!) so clouds dim with the night like everything else.
+	var cmat := StandardMaterial3D.new()
+	cmat.albedo_color = Color(1.0, 1.0, 1.0, 0.75)
+	cmat.roughness = 1.0
+	cmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	for i in 6:
+		var cloud := Node3D.new()
+		add_child(cloud)
+		for b in randi_range(3, 5):
+			var puff := MeshInstance3D.new()
+			var sm := SphereMesh.new()
+			var r := randf_range(1.1, 2.4)
+			sm.radius = r
+			sm.height = r
+			sm.radial_segments = 16
+			sm.rings = 8
+			puff.mesh = sm
+			puff.material_override = cmat
+			puff.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			puff.layers = 2  # sky life stays off the static map render
+			puff.scale = Vector3(1.7, 0.5, 1.0)
+			puff.position = Vector3(b * randf_range(1.2, 1.9) - 3.0,
+				randf_range(-0.3, 0.4), randf_range(-0.7, 0.7))
+			cloud.add_child(puff)
+		# Behind the building (z < -14) so they never wash over the office.
+		cloud.position = Vector3(randf_range(-52.0, 52.0),
+			randf_range(15.0, 22.0), randf_range(-34.0, -14.0))
+		_drift_cloud(cloud)
+
+func _drift_cloud(cloud: Node3D) -> void:
+	while is_instance_valid(cloud) and is_inside_tree():
+		var speed := randf_range(0.3, 0.65)
+		var tw := create_tween()
+		tw.tween_property(cloud, "position:x", 56.0,
+			(56.0 - cloud.position.x) / speed)
+		await tw.finished
+		if not is_instance_valid(cloud):
+			return
+		cloud.position.x = -56.0
+		cloud.position.y = randf_range(15.0, 22.0)
+
+func _bird_loop() -> void:
+	while is_inside_tree():
+		await get_tree().create_timer(randf_range(30.0, 75.0)).timeout
+		if not is_inside_tree():
+			return
+		var dir := 1.0 if randf() < 0.5 else -1.0
+		var y := randf_range(7.5, 11.5)
+		var z := randf_range(-16.0, 2.0)
+		for i in randi_range(3, 5):
+			var bird := Sprite3D.new()
+			bird.set_script(BirdScript)
+			add_child(bird)
+			bird.position = Vector3(-dir * (46.0 + i * randf_range(1.0, 2.4)),
+				y + randf_range(-1.0, 1.0), z + randf_range(-1.6, 1.6))
+			bird.flip_h = dir < 0.0
+			var tw := create_tween()
+			tw.tween_property(bird, "position:x", dir * 48.0, randf_range(15.0, 19.0))
+			tw.tween_callback(bird.queue_free)
+
+var pollen: GPUParticles3D
+var fireflies: GPUParticles3D
+
+## Daytime pollen motes over the meadow; fireflies take the night shift.
+func _build_ambient_particles() -> void:
+	var soft := StandardMaterial3D.new()
+	soft.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	soft.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	soft.vertex_color_use_as_albedo = true
+	soft.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	soft.albedo_color = Color(1, 1, 1)
+
+	var ppp := ParticleProcessMaterial.new()
+	ppp.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	ppp.emission_box_extents = Vector3(30.0, 2.2, 20.0)
+	ppp.gravity = Vector3(0.35, 0.06, 0.12)
+	ppp.scale_min = 0.6
+	ppp.scale_max = 1.0
+	var ramp := Gradient.new()
+	ramp.offsets = PackedFloat32Array([0.0, 0.25, 0.75, 1.0])
+	ramp.colors = PackedColorArray([Color(1, 1, 0.85, 0.0), Color(1, 1, 0.85, 0.5),
+		Color(1, 1, 0.85, 0.5), Color(1, 1, 0.85, 0.0)])
+	var rampt := GradientTexture1D.new()
+	rampt.gradient = ramp
+	ppp.color_ramp = rampt
+	pollen = GPUParticles3D.new()
+	pollen.amount = 70
+	pollen.lifetime = 10.0
+	pollen.preprocess = 10.0
+	pollen.process_material = ppp
+	var pq := QuadMesh.new()
+	pq.size = Vector2(0.045, 0.045)
+	pq.material = soft
+	pollen.draw_pass_1 = pq
+	pollen.position = Vector3(3.0, 2.2, 1.5)
+	pollen.layers = 2
+	add_child(pollen)
+
+	var fpp := ParticleProcessMaterial.new()
+	fpp.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	fpp.emission_box_extents = Vector3(14.0, 0.9, 10.0)
+	fpp.gravity = Vector3.ZERO
+	fpp.initial_velocity_min = 0.15
+	fpp.initial_velocity_max = 0.5
+	fpp.direction = Vector3(0, 0.2, 0)
+	fpp.spread = 180.0
+	var framp := Gradient.new()
+	framp.offsets = PackedFloat32Array([0.0, 0.2, 0.5, 0.8, 1.0])
+	framp.colors = PackedColorArray([Color(0.6, 1, 0.4, 0.0), Color(0.6, 1, 0.4, 0.9),
+		Color(0.6, 1, 0.4, 0.15), Color(0.6, 1, 0.4, 0.9), Color(0.6, 1, 0.4, 0.0)])
+	var frampt := GradientTexture1D.new()
+	frampt.gradient = framp
+	fpp.color_ramp = frampt
+	var glow := StandardMaterial3D.new()
+	glow.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	glow.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	glow.vertex_color_use_as_albedo = true
+	glow.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	glow.emission_enabled = true
+	glow.emission = Color(0.5, 1.0, 0.35)
+	glow.emission_energy_multiplier = 2.2
+	fireflies = GPUParticles3D.new()
+	fireflies.amount = 26
+	fireflies.lifetime = 7.0
+	fireflies.preprocess = 7.0
+	fireflies.process_material = fpp
+	var fq := QuadMesh.new()
+	fq.size = Vector2(0.06, 0.06)
+	fq.material = glow
+	fireflies.draw_pass_1 = fq
+	fireflies.position = Vector3(-2.0, 1.0, 9.0)  # over the south meadow
+	fireflies.layers = 2
+	fireflies.emitting = false
+	add_child(fireflies)
+
+## Day cycle hands over the shift: pollen by day, fireflies by night.
+func set_night_life(night: bool) -> void:
+	if pollen:
+		pollen.emitting = not night
+	if fireflies:
+		fireflies.emitting = night
+
+# ---------------------------------------------------------------- clock
+
+var _clock_label: Label3D
+var _icon_day: Node3D
+var _icon_night: Node3D
+var _icon_dusk: Node3D
+
+## Big digital clock on the roofline (next to the brand billboard), with a
+## weather/phase icon — tilted at the camera like every readable surface.
+func _build_clock() -> void:
+	var rig := Node3D.new()
+	add_child(rig)
+	rig.position = Vector3(11.6, 4.15, -9.8)
+	rig.rotation_degrees.x = -42.0
+
+	var frame := CSGBox3D.new()
+	frame.size = Vector3(3.5, 1.2, 0.14)
+	frame.material = _mat(Color(0.16, 0.18, 0.22), 0.55)
+	rig.add_child(frame)
+	var panel := CSGBox3D.new()
+	panel.size = Vector3(3.3, 1.0, 0.06)
+	panel.material = _mat(Color(0.03, 0.045, 0.08), 0.3)
+	panel.position.z = 0.06
+	rig.add_child(panel)
+	for px in [-1.45, 1.45]:
+		var post := CSGBox3D.new()
+		post.size = Vector3(0.12, 1.5, 0.12)
+		post.material = _mat(Color(0.16, 0.18, 0.22), 0.55)
+		post.position = Vector3(px, -0.75, -0.25)
+		rig.add_child(post)
+
+	_clock_label = Label3D.new()
+	_clock_label.text = "--:--"
+	_clock_label.font_size = 150
+	_clock_label.outline_size = 24
+	_clock_label.modulate = Color(0.55, 1.0, 0.95)
+	_clock_label.outline_modulate = Color(0, 0, 0, 0.85)
+	_clock_label.position = Vector3(-0.42, 0.0, 0.12)
+	rig.add_child(_clock_label)
+
+	# phase icons live to the right of the digits
+	var icon_root := Node3D.new()
+	icon_root.position = Vector3(1.18, 0.0, 0.14)
+	rig.add_child(icon_root)
+
+	_icon_day = Node3D.new()
+	var sun := MeshInstance3D.new()
+	var sun_m := SphereMesh.new()
+	sun_m.radius = 0.17
+	sun_m.height = 0.34
+	sun.mesh = sun_m
+	sun.material_override = _mat(Color(1.0, 0.85, 0.3), 0.6, Color(1.0, 0.8, 0.25), 2.2)
+	_icon_day.add_child(sun)
+	for i in 8:
+		var ray := CSGBox3D.new()
+		ray.size = Vector3(0.1, 0.035, 0.03)
+		ray.material = sun.material_override
+		var ang := TAU * i / 8.0
+		ray.position = Vector3(cos(ang) * 0.28, sin(ang) * 0.28, 0)
+		ray.rotation.z = ang
+		_icon_day.add_child(ray)
+	icon_root.add_child(_icon_day)
+
+	_icon_night = Node3D.new()
+	var moon := MeshInstance3D.new()
+	moon.mesh = sun_m
+	moon.material_override = _mat(Color(0.85, 0.9, 1.0), 0.6, Color(0.7, 0.8, 1.0), 1.4)
+	_icon_night.add_child(moon)
+	var bite := MeshInstance3D.new()
+	var bite_m := SphereMesh.new()
+	bite_m.radius = 0.14
+	bite_m.height = 0.28
+	bite.mesh = bite_m
+	bite.material_override = _mat(Color(0.03, 0.045, 0.08), 0.3)
+	bite.position = Vector3(0.09, 0.06, 0.05)
+	_icon_night.add_child(bite)
+	icon_root.add_child(_icon_night)
+
+	_icon_dusk = Node3D.new()
+	var low_sun := MeshInstance3D.new()
+	low_sun.mesh = sun_m
+	low_sun.material_override = _mat(Color(1.0, 0.55, 0.25), 0.6, Color(1.0, 0.45, 0.15), 2.0)
+	low_sun.position.y = -0.07
+	_icon_dusk.add_child(low_sun)
+	var horizon := CSGBox3D.new()
+	horizon.size = Vector3(0.55, 0.16, 0.08)
+	horizon.material = _mat(Color(0.03, 0.045, 0.08), 0.3)
+	horizon.position = Vector3(0, -0.18, 0.06)
+	_icon_dusk.add_child(horizon)
+	icon_root.add_child(_icon_dusk)
+
+	update_clock("--:--", "day")
+
+func update_clock(text: String, phase: String) -> void:
+	if _clock_label:
+		_clock_label.text = text
+	if _icon_day:
+		_icon_day.visible = phase == "day"
+	if _icon_night:
+		_icon_night.visible = phase == "night"
+	if _icon_dusk:
+		_icon_dusk.visible = phase in ["dawn", "dusk"]
 
 # ---------------------------------------------------------------- graph
 

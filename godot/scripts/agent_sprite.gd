@@ -16,6 +16,7 @@ extends Sprite3D
 @export var agent_role := "Staff"
 
 const CharacterFactory := preload("res://scripts/character_factory.gd")
+const AuraFactory := preload("res://scripts/aura_factory.gd")
 const WALK_SPEED := 1.6        # m/s
 const IDLE_FPS := 5.0
 const WALK_FPS := 9.0
@@ -109,6 +110,25 @@ func _ready() -> void:
 func _exit_tree() -> void:
 	if _hud:
 		_hud.unregister(self)
+
+var _aura_node: Node3D
+var aura := ""
+
+## Equippable cosmetic aura (elemental ground ring) — picked in the editor.
+func set_aura(element: String) -> void:
+	if element == aura:
+		return
+	aura = element
+	if _aura_node:
+		_aura_node.queue_free()
+		_aura_node = null
+	if element == "" or element == "none" or not AuraFactory.ELEMENTS.has(element):
+		return
+	if not AuraFactory.has_assets():
+		return
+	_aura_node = AuraFactory.build(element)
+	_aura_node.position = Vector3(0, -0.84, 0)  # node floats at y 0.86 — ring on floor
+	add_child(_aura_node)
 
 ## Live identity update from the registry (rename / new role / new avatar).
 func apply_identity(p_name: String, p_role: String, p_npc: int) -> void:

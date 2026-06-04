@@ -6,6 +6,10 @@ shell/target/
 
 # Runtime artifacts
 daemon/journal.jsonl
+daemon/registry.json
+daemon/sessions.json
+daemon/map_bg.png
+daemon/mcp_*.json
 
 # Adapter session workspace (keep only the permission-hook config)
 workspace/*

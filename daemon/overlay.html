@@ -780,8 +780,15 @@
     const a = id ? ROSTER[id] : { name: "", role: REGROLES[2] || "Specialist", avatar: 1, prompt: "" };
     const isUser = !!a.isUser;  // the CEO is YOU — no prompt/skills/tools
     let avatar = a.avatar || 1;
+    let myAura = a.aura || "";
     const mySkills = new Set(a.skills || []);
     const myTools = new Set(a.tools || []);
+    const AURAS = [["", "✨ none", "#8294ab"], ["fire", "🔥 fire", "#ff9540"],
+      ["ice", "❄ ice", "#6fd3ff"], ["nature", "🍃 nature", "#7be36b"],
+      ["arcane", "🔮 arcane", "#cf7dff"], ["shadow", "🌑 shadow", "#9a7fd9"],
+      ["gold", "👑 gold", "#ffd24d"]];
+    const auraField = `<div class="field"><label>✨ AURA — วงแสงเวทย์ใต้เท้า (ของตกแต่ง)</label>
+      <div class="checks" id="eAura"></div></div>`;
     const aiFields = `
        <div class="field"><label>JOB TITLE</label><select id="eRole"></select></div>
        <div class="field"><label>✨ PROMPT COPILOT — บอกสั้นๆ ว่าอยากได้ agent แบบไหน</label>
@@ -799,12 +806,32 @@
          เลือกหน้าตากับชื่อได้ตามใจ</div>` : "") +
       `<div class="field"><label>AVATAR</label><div id="avGrid"></div></div>
        <div class="field"><label>NAME</label><input id="eName" maxlength="40"></div>` +
+      auraField +
       (isUser ? "" : aiFields) +
       `<div class="btnrow">
          ${id && !a.protected ? `<button class="danger" id="eDel">🗑 Delete</button>` : ""}
          <button id="eCancel">Cancel</button>
          <button class="primary" id="eSave">💾 Save</button>
        </div>`;
+    // aura picker chips
+    const auBox = modalCard.querySelector("#eAura");
+    for (const [val, label, colr] of AURAS) {
+      const c = document.createElement("div");
+      c.className = "chk" + (myAura === val ? " on" : "");
+      c.textContent = label;
+      c.style.borderColor = myAura === val ? colr : "";
+      c.style.color = myAura === val ? colr : "";
+      c.onclick = () => {
+        myAura = val;
+        auBox.querySelectorAll(".chk").forEach((x, i) => {
+          const on = AURAS[i][0] === val;
+          x.classList.toggle("on", on);
+          x.style.borderColor = on ? AURAS[i][2] : "";
+          x.style.color = on ? AURAS[i][2] : "";
+        });
+      };
+      auBox.appendChild(c);
+    }
     // skill / tool assignment chips
     const skBox = modalCard.querySelector("#eSkills");
     if (skBox) {
@@ -876,8 +903,8 @@
       const name = modalCard.querySelector("#eName").value.trim();
       if (!name) return modalCard.querySelector("#eName").focus();
       const payload = isUser
-        ? { id, name, avatar }  // the CEO row keeps no AI fields
-        : { id, name, role: roleSel.value, avatar,
+        ? { id, name, avatar, aura: myAura }  // the CEO row keeps no AI fields
+        : { id, name, role: roleSel.value, avatar, aura: myAura,
             prompt: modalCard.querySelector("#ePrompt").value,
             skills: [...mySkills], tools: [...myTools] };
       const r = await api("/registry/agent", payload);

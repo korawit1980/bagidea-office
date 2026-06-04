@@ -570,6 +570,7 @@ const server = http.createServer((req, res) => {
           name: String(p.name || cur.name || id).slice(0, 40),
           role: String(p.role || cur.role || "Specialist").slice(0, 40),
           avatar: Math.min(Math.max(Number(p.avatar) || cur.avatar || 1, 1), 12),
+          aura: String(p.aura !== undefined ? p.aura : cur.aura || "").slice(0, 16),
           prompt: String(p.prompt !== undefined ? p.prompt : cur.prompt || "").slice(0, 8000),
           skills: Array.isArray(p.skills) ? p.skills : cur.skills || [],
           tools: Array.isArray(p.tools) ? p.tools : cur.tools || [],
