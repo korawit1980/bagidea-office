@@ -267,6 +267,18 @@ fn tray_app_icon() -> Option<tray_icon::Icon> {
 // --------------------------------------------------------------------- main
 
 fn main() {
+    // ---- single instance: a second launch exits immediately (the suite is
+    // a background companion — duplicates mean duplicate wallpapers/daemons)
+    unsafe {
+        use windows_sys::Win32::Foundation::{GetLastError, ERROR_ALREADY_EXISTS};
+        use windows_sys::Win32::System::Threading::CreateMutexW;
+        let name = wide("BagIdeaOfficeShellSingleton");
+        CreateMutexW(std::ptr::null(), 0, name.as_ptr());
+        if GetLastError() == ERROR_ALREADY_EXISTS {
+            return;
+        }
+    }
+
     // ---- boot the whole stack
     let root = project_root();
     let mut daemon_child = spawn_daemon(&root);
