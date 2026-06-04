@@ -120,20 +120,22 @@ fn spawn_daemon(root: &PathBuf) -> Option<Child> {
         .ok()
 }
 
-fn spawn_office(root: &PathBuf) -> Option<Child> {
+fn spawn_office(root: &PathBuf, cx: i32, cy: i32) -> Option<Child> {
     let godot = std::env::var("BAGIDEA_GODOT")
         .unwrap_or_else(|_| r"E:\Tools\Godot\Godot_v4.6.3-stable_win64.exe".into());
     if !std::path::Path::new(&godot).exists() {
         return None; // overlay-only mode
     }
-    // Born 64px and parked toward off-screen: Windows clamps far-off
-    // positions back to the desktop, but a 64px window is invisible in
-    // practice — the shell's circular splash owns the boot look while
-    // office_floor.gd grows the window to fullscreen after the first frame.
+    // Born 64px DEAD CENTER — exactly under the shell's circular splash, so
+    // the loading window hides behind the logo (user's idea: let the splash
+    // cover it). office_floor.gd grows it to fullscreen after first frame.
     Command::new(godot)
         .args(["--path"])
         .arg(root.join("godot"))
-        .args(["--resolution", "64x64", "--position", "-9000,100", "--", "--wallpaper"])
+        .args(["--resolution", "64x64"])
+        .arg("--position")
+        .arg(format!("{},{}", cx - 32, cy - 32))
+        .args(["--", "--wallpaper"])
         .creation_flags(CREATE_NO_WINDOW)
         .spawn()
         .ok()
@@ -331,7 +333,13 @@ fn main() {
     let event_loop = EventLoopBuilder::<UserEvent>::with_user_event().build();
     let proxy = event_loop.create_proxy();
 
-    let mut office_child = spawn_office(&root);
+    // Physical screen center — the godot boot window hides here, under the
+    // splash circle.
+    let (phys_w, phys_h) = event_loop
+        .primary_monitor()
+        .map(|m| (m.size().width as i32, m.size().height as i32))
+        .unwrap_or((1920, 1080));
+    let mut office_child = spawn_office(&root, phys_w / 2, phys_h / 2 - 30);
     if let Some(child) = office_child.as_ref() {
         attach_wallpaper_when_ready(child.id(), proxy.clone());
     }
