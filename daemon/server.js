@@ -400,7 +400,7 @@ function runClaude(agent, prompt, opts = {}) {
 // walks over, takes the order, replies with a plan, and may delegate via
 // `DELEGATE: <agent_id> :: <instruction>` lines — each spawns a real
 // session for that agent (plus a little walk in the world).
-function ceoFlow(prompt) {
+function ceoFlow(prompt, session) {
   broadcast({ type: "ceo.summon", agent: "main" });
   const team = Object.entries(reg.agents)
     .filter(([id]) => id !== "ceo" && id !== "main")
@@ -417,6 +417,7 @@ function ceoFlow(prompt) {
     `Anything not delegated you handle yourself. Reply to the owner with a short ` +
     `plan in the language they used.`;
   return runClaude("main", wrapped, {
+    session,
     logPrompt: "👑 (CEO) " + prompt,
     filterText: (text) => {
       const keep = [];
@@ -664,7 +665,7 @@ const server = http.createServer((req, res) => {
         const { agent = "main", prompt, session } = JSON.parse(body);
         if (!prompt) throw new Error("no prompt");
         // Orders to the CEO route through the Director — chain of command.
-        const task = agent === "ceo" ? ceoFlow(prompt) : runClaude(agent, prompt, { session });
+        const task = agent === "ceo" ? ceoFlow(prompt, session) : runClaude(agent, prompt, { session });
         res.writeHead(200, { "content-type": "application/json" });
         res.end(JSON.stringify({ task }));
       } catch (e) {

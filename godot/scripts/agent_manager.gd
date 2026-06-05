@@ -326,9 +326,16 @@ func _spawn_ghost(parent_id: String, sub: String, job: String) -> void:
 		return
 	var pa: Dictionary = _ensure(parent_id)
 	var pnode: Sprite3D = pa.node
-	var g := _make_char(parent_id)  # the parent's own face and name…
-	g.rank = "ghost"                # …but spectral dressing on the plate
-	g.agent_name = str(g.agent_name) + " · " + sub.get_slice("#", 1).to_upper()
+	var g := _make_char(parent_id)
+	# A clone wears the parent's EXACT face: copy identity off the live node —
+	# _make_char's hash fallback may have rolled a different sheet, and ghosts
+	# never receive the roster's apply_identity correction.
+	g.npc_index = pnode.npc_index
+	g.suit_color = pnode.suit_color
+	g.hair_color = pnode.hair_color
+	g.skin_color = pnode.skin_color
+	g.rank = "ghost"                # spectral dressing on the plate
+	g.agent_name = str(pnode.agent_name) + " · " + sub.get_slice("#", 1).to_upper()
 	g.agent_role = "sub-agent"
 	get_parent().add_child(g)
 	g.set_ghost()
@@ -517,7 +524,9 @@ func _make_char(id: String) -> Sprite3D:
 		s.rank = "lead"
 	elif id == "ceo":
 		s.rank = "ceo"
-	else:
+	elif not roster.has(id):
+		# Hash-rolled look ONLY for unregistered ids — it must never stomp
+		# the face/role the owner picked in the registry.
 		s.npc_index = [1, 2, 3, 4, 5, 6, 9, 10, 11, 12][h % 10]
 		s.agent_role = ["Researcher", "Engineer", "Designer", "Analyst",
 			"Operator", "Specialist"][h % 6]

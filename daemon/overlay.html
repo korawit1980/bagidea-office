@@ -175,6 +175,12 @@
     background: rgba(255,255,255,0.03);
   }
   .mission .id { color: var(--dim); font-size: 10.5px; }
+  #activity .act {
+    font-size: 11px; color: var(--dim); padding: 2.5px 2px;
+    border-bottom: 1px dashed rgba(255,255,255,0.05); line-height: 1.45;
+  }
+  #activity .act b { color: #cfe3ff; font-weight: 600; }
+  #activity .act .t { color: rgba(160,170,190,0.55); font-size: 10px; margin-right: 5px; }
   .mission.running { border-left-color: #5ec8ff; }
   .mission.blocked { border-left-color: #ffb054; }
   .mission.done { border-left-color: #4ade80; opacity: 0.7; }
@@ -372,6 +378,8 @@
     <div id="perms"></div>
     <h2>🛰 MISSION CONTROL</h2>
     <div id="missions"></div>
+    <h2>📜 OFFICE LOG</h2>
+    <div id="activity"></div>
   </aside>
 </main>
 
@@ -506,7 +514,7 @@
       ? `สั่งงานในนาม CEO… (Director จะมารับคำสั่ง)`
       : `Message ${nameOf(id)}… (Enter to send)`;
     renderRail();
-    refreshThreadBar();
+    refreshThreadBar(true);  // clicking a seat always shows that agent's latest thread
   }
 
   // ---- chat ---------------------------------------------------------------
@@ -531,6 +539,20 @@
     d.className = "chip"; d.innerHTML = html;
     log.appendChild(d);
     log.scrollTop = log.scrollHeight;
+  }
+
+  // Office activity (tool calls, hand-overs, ghost trips…) belongs to the
+  // 📜 OFFICE LOG in the sidebar — the chat pane stays pure conversation.
+  function addLog(html) {
+    const box = document.getElementById("activity");
+    const d = document.createElement("div");
+    d.className = "act";
+    const t = new Date();
+    const hh = String(t.getHours()).padStart(2, "0");
+    const mm = String(t.getMinutes()).padStart(2, "0");
+    d.innerHTML = `<span class="t">${hh}:${mm}</span>${html}`;
+    box.prepend(d);
+    while (box.children.length > 40) box.removeChild(box.lastChild);
   }
 
   function renderMissions() {
@@ -1058,33 +1080,40 @@
     } catch {}
   }
 
+  // CEO orders run as the Director's sessions (👑-prefixed) — the CEO pane
+  // reads and resumes those threads, so "what did my order produce" is one
+  // click away.
+  function sessAgent() { return target === "ceo" ? "main" : target; }
+
   // The chat pane shows ONE conversation: the current thread of the current
   // agent — switching either reloads its history from the daemon.
   async function loadThreadLog(key) {
     log.innerHTML = "";
     if (!key) return;
     try {
-      const r = await fetch(`/sessions/log?agent=${encodeURIComponent(target)}&key=${encodeURIComponent(key)}`)
+      const r = await fetch(`/sessions/log?agent=${encodeURIComponent(sessAgent())}&key=${encodeURIComponent(key)}`)
         .then((x) => x.json());
       for (const m of r.log || [])
-        addMsg(m.who === "you" ? "you" : "agent", m.who === "you" ? null : target, m.text);
+        addMsg(m.who === "you" ? "you" : "agent", m.who === "you" ? null : sessAgent(), m.text);
     } catch {}
   }
 
-  async function refreshThreadBar() {
+  // force=true (agent click) always re-renders the pane — the log view is
+  // shared, so "same thread as before" never means "still on screen".
+  async function refreshThreadBar(force = false) {
     if (SESS[target] === "new") {
       CUR[target] = null;
       log.innerHTML = "";
       return setThreadLabel("🆕 thread ใหม่ — เริ่มเมื่อส่งข้อความแรก");
     }
     try {
-      const r = await fetch(`/sessions?agent=${encodeURIComponent(target)}`).then((x) => x.json());
+      const r = await fetch(`/sessions?agent=${encodeURIComponent(sessAgent())}`).then((x) => x.json());
       const list = r.sessions || [];
       let cur = SESS[target] ? list.find((s) => s.key === SESS[target]) : null;
       if (!cur) cur = list[0];
       setThreadLabel(cur ? cur.title : "ยังไม่มี — จะสร้างให้เองเมื่อคุยครั้งแรก");
       const key = cur ? cur.key : null;
-      if (CUR[target] !== key) {
+      if (CUR[target] !== key || force) {
         CUR[target] = key;
         await loadThreadLog(key);
       }
@@ -1095,7 +1124,7 @@
     e.stopPropagation();
     const m = document.getElementById("sessMenu");
     if (m.classList.contains("open")) return m.classList.remove("open");
-    const r = await fetch(`/sessions?agent=${encodeURIComponent(target)}`).then((x) => x.json());
+    const r = await fetch(`/sessions?agent=${encodeURIComponent(sessAgent())}`).then((x) => x.json());
     const list = r.sessions || [];
     // ไม่ได้เลือกอะไร = คุยต่อ thread ล่าสุดเสมอ
     const activeKey = SESS[target] || (list[0] && list[0].key);
@@ -1293,18 +1322,18 @@
     const gname = `${nameOf(pid)} · ${tag}`;
     if (ev.replay) return;
     if (ev.type === "subagent.spawned")
-      addChip(`👻 <b>${gname}</b> แตกร่างขึ้น Ghost Deck — ${String(ev.text || "").slice(0, 60)}`);
+      addLog(`👻 <b>${gname}</b> แตกร่างขึ้น Ghost Deck — ${String(ev.text || "").slice(0, 60)}`);
     else if (ev.type === "subagent.done")
-      addChip(`👻 <b>${gname}</b> ${ev.ok ? "งานเสร็จ ✓ กลับเข้าร่าง" : "ล้มเหลว ✗ กลับเข้าร่าง"}`);
+      addLog(`👻 <b>${gname}</b> ${ev.ok ? "งานเสร็จ ✓ กลับเข้าร่าง" : "ล้มเหลว ✗ กลับเข้าร่าง"}`);
     else if (ev.type === "subagent.progress")
-      addChip(`⚙ <b>${ev.tool || "…"}</b> — 👻 ${gname}`);
+      addLog(`⚙ <b>${ev.tool || "…"}</b> — 👻 ${gname}`);
     else if (ev.type === "chat.message") {
       if (groupView && ev.session === groupView) addMsg("agent", pid, ev.text);
     }
     else if (ev.type === "perm.requested") addPermCard({ ...ev, agent: gname });
     else if (ev.type === "perm.approved" || ev.type === "perm.denied") {
       removePermCard(ev.perm);
-      addChip(`🛡 ${ev.tool} — <b>${ev.type === "perm.approved" ? "allowed" : "denied"}</b> (👻 ${gname})`);
+      addLog(`🛡 ${ev.tool} — <b>${ev.type === "perm.approved" ? "allowed" : "denied"}</b> (👻 ${gname})`);
     }
   }
 
@@ -1345,24 +1374,24 @@
     const key = ev.task || ev.agent;
     if (ev.type === "theater.started") {
       document.getElementById("theater").style.display = "inline";
-      addChip(`⏪ <b>Replay Theater</b> — ${ev.events} events at ${ev.speed}×`);
+      addLog(`⏪ <b>Replay Theater</b> — ${ev.events} events at ${ev.speed}×`);
       return;
     }
     if (ev.type === "theater.ended") {
       document.getElementById("theater").style.display = "none";
-      addChip("⏪ replay finished");
+      addLog("⏪ replay finished");
       return;
     }
     if (ev.theater) {
-      if (ev.type === "chat.message") addChip(`⏪ 💬 <b>${ev.agent}</b>: ${String(ev.text).slice(0, 60)}`);
-      else if (ev.type === "task.progress") addChip(`⏪ ⚙ ${ev.tool || ""} — ${ev.agent}`);
+      if (ev.type === "chat.message") addLog(`⏪ 💬 <b>${ev.agent}</b>: ${String(ev.text).slice(0, 60)}`);
+      else if (ev.type === "task.progress") addLog(`⏪ ⚙ ${ev.tool || ""} — ${ev.agent}`);
       return;
     }
     // Ghost traffic peels off before anything can mint a rail seat for it.
     const subId = ev.sub || (ev.agent && String(ev.agent).includes("#") ? ev.agent : null);
     if (subId) return routeSub(ev, subId);
     if (ev.type === "subagent.split") {
-      if (!ev.replay) addChip(`👻 <b>${nameOf(ev.agent)}</b> แตกร่าง ${ev.count} sub-agents → Ghost Deck`);
+      if (!ev.replay) addLog(`👻 <b>${nameOf(ev.agent)}</b> แตกร่าง ${ev.count} sub-agents → Ghost Deck`);
       return;
     }
     if (ev.agent) ensureAgent(ev.agent);
@@ -1374,12 +1403,13 @@
       // come from /sessions/log instead.
       if (!ev.replay && groupView && ev.session === groupView)
         addMsg("agent", ev.agent, ev.text);
-      else if (!ev.replay && !groupView && ev.agent === target &&
+      else if (!ev.replay && !groupView &&
+          (ev.agent === target || (target === "ceo" && ev.agent === "main")) &&
           (!ev.session || !CUR[target] || ev.session === CUR[target]))
         addMsg("agent", ev.agent, ev.text);
     }
     else if (ev.type === "task.progress") {
-      if (!ev.replay) addChip(`⚙ <b>${ev.tool || "…"}</b> — ${ev.agent}`);
+      if (!ev.replay) addLog(`⚙ <b>${ev.tool || "…"}</b> — ${nameOf(ev.agent)}`);
       if (missions[key]) { missions[key].tool = ev.tool; renderMissions(); }
       ensureAgent(ev.agent, "working");
     }
@@ -1405,22 +1435,29 @@
       removePermCard(ev.perm);
       if (missions[key]) { missions[key].state = "running"; renderMissions(); }
       ensureAgent(ev.agent, "working");
-      if (!ev.replay) addChip(`🛡 ${ev.tool} — <b>${ev.type === "perm.approved" ? "allowed" : "denied"}</b>`);
+      if (!ev.replay) addLog(`🛡 ${ev.tool} — <b>${ev.type === "perm.approved" ? "allowed" : "denied"}</b> (${nameOf(ev.agent)})`);
     }
     else if (ev.type === "ceo.summon") {
-      if (!ev.replay) addChip(`👑 CEO เรียก <b>${nameOf("main")}</b> เข้ารับคำสั่ง`);
+      // Direct feedback in the CEO pane (you just gave the order) — log otherwise.
+      if (!ev.replay) {
+        addLog(`👑 CEO เรียก <b>${nameOf("main")}</b> เข้ารับคำสั่ง`);
+        if (target === "ceo") addChip(`👑 <b>${nameOf("main")}</b> กำลังเดินมารับคำสั่ง…`);
+      }
     }
     else if (ev.type === "task.delegated") {
-      if (!ev.replay) addChip(`📋 <b>${nameOf("main")}</b> มอบหมายงานให้ <b>${nameOf(ev.target)}</b>`);
+      if (!ev.replay) {
+        addLog(`📋 <b>${nameOf("main")}</b> มอบหมายงานให้ <b>${nameOf(ev.target)}</b>`);
+        if (target === "ceo") addChip(`📋 มอบหมายงานให้ <b>${nameOf(ev.target)}</b>`);
+      }
     }
     else if (ev.type === "collab.started") {
-      if (!ev.replay) addChip(`🤝 ประชุมเริ่ม — ${(ev.agents || []).map(nameOf).join(", ")}`);
+      if (!ev.replay) addLog(`🤝 ประชุมเริ่ม — ${(ev.agents || []).map(nameOf).join(", ")}`);
     }
     else if (ev.type === "collab.ended") {
-      if (!ev.replay) addChip(`🤝 ประชุมจบ`);
+      if (!ev.replay) addLog(`🤝 ประชุมจบ`);
     }
     else if (ev.type === "skill.created") {
-      if (!ev.replay) addChip(`📚 <b>${ev.agent}</b> learned a new skill: <b>${ev.skill}</b>`);
+      if (!ev.replay) addLog(`📚 <b>${nameOf(ev.agent)}</b> learned a new skill: <b>${ev.skill}</b>`);
     }
     else if (ev.type === "agent.online") ensureAgent(ev.agent, "idle");
     else if (ev.type === "agent.offline") ensureAgent(ev.agent, "offline");
