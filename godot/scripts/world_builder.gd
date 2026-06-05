@@ -927,15 +927,6 @@ func whiteboard_add(who: String, text: String) -> void:
 	if hud:
 		hud.wb_add(text if who == "" else who + ": " + text)
 
-## Replay Theater: sepia grade in-world + marquee banner on the HUD.
-func set_theater(on: bool) -> void:
-	var we := get_node_or_null("../WorldEnvironment")
-	if we:
-		we.environment.adjustment_saturation = 0.5 if on else 1.22
-	var hud := get_node_or_null("../Hud")
-	if hud:
-		hud.set_theater(on)
-
 # ---------------------------------------------------------------- board
 
 func board_set(key: String, state: String, label := "") -> void:

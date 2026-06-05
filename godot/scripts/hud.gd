@@ -19,12 +19,10 @@ var _fx_list: Array = []  # {s: Sprite2D, agent, frames, loops, t}
 var _wb_panel: PanelContainer
 var _wb_box: VBoxContainer
 var _wb_lines: Array[String] = []
-var _theater_banner: Label
 
 func _ready() -> void:
 	layer = 2
 	_build_whiteboard()
-	_build_theater_banner()
 
 # ---------------------------------------------------------------- nameplates
 
@@ -328,36 +326,6 @@ func _wb_refresh() -> void:
 			else (Color(1.0, 1.0, 1.0) if last else Color(0.7, 0.73, 0.82)))
 		_wb_box.add_child(l)
 
-# ---------------------------------------------------------------- theater
-
-func _build_theater_banner() -> void:
-	_theater_banner = Label.new()
-	_theater_banner.text = "⏪  R E P L A Y   T H E A T E R"
-	_theater_banner.add_theme_font_size_override("font_size", 26)
-	_theater_banner.add_theme_color_override("font_color", Color(1.0, 0.4, 0.35))
-	_theater_banner.add_theme_constant_override("outline_size", 8)
-	_theater_banner.add_theme_color_override("font_outline_color", Color(0.1, 0.02, 0.02, 0.9))
-	_theater_banner.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	_theater_banner.position.y = 18
-	_theater_banner.visible = false
-	_theater_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(_theater_banner)
-
-var _theater_tw: Tween
-
-func set_theater(on: bool) -> void:
-	_theater_banner.visible = on
-	if _theater_tw:
-		_theater_tw.kill()
-		_theater_tw = null
-	if on:
-		# Old projector flicker — the banner breathes while the reel runs.
-		_theater_tw = create_tween().set_loops()
-		_theater_tw.tween_property(_theater_banner, "modulate:a", 0.45, 0.7)
-		_theater_tw.tween_property(_theater_banner, "modulate:a", 1.0, 0.7)
-	else:
-		_theater_banner.modulate.a = 1.0
-
 # ---------------------------------------------------------------- tracking
 
 func _process(_delta: float) -> void:
@@ -392,6 +360,3 @@ func _process(_delta: float) -> void:
 	if _wb_panel.visible:
 		var sp2 := cam.unproject_position(Vector3(13, 2.4, -0.5))
 		_wb_panel.position = sp2 - Vector2(_wb_panel.size.x * 0.5, _wb_panel.size.y)
-	if _theater_banner.visible:
-		_theater_banner.position.x = get_viewport().get_visible_rect().size.x * 0.5 \
-			- _theater_banner.size.x * 0.5

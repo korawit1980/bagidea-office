@@ -49,16 +49,6 @@
   header .logo { color: var(--accent); }
   #conn { width: 8px; height: 8px; border-radius: 50%; background: #ff5448; flex: none; }
   #conn.on { background: #4ade80; box-shadow: 0 0 8px #4ade8088; }
-  /* Replay indicator floats as its own pill — inline in the header it used
-     to shove the buttons into a wrapped, broken layout. */
-  #theater {
-    display: none; position: fixed; top: 44px; left: 50%;
-    transform: translateX(-50%); z-index: 170;
-    color: #ffb3ab; background: rgba(110, 22, 18, 0.88);
-    border: 1px solid rgba(255, 90, 77, 0.8); border-radius: 14px;
-    padding: 3px 14px; font-weight: 700; font-size: 11px; letter-spacing: 2px;
-    animation: chipIn 0.3s ease both;
-  }
   header button {
     margin-left: auto; font-size: 12px; padding: 4px 7px; cursor: pointer;
     color: var(--accent); background: rgba(255,255,255,0.05);
@@ -164,11 +154,6 @@
     animation: chipIn 0.3s ease both;
   }
   .chip b { color: #ffd28a; font-weight: 600; }
-  .chip.theater {
-    border-color: rgba(196, 138, 64, 0.5); color: #c8a468;
-    background: rgba(120, 84, 30, 0.1); font-size: 11px;
-  }
-  .chip.theater b { color: #e8c88a; }
   .toolrow {
     align-self: flex-start; font-size: 10px; color: rgba(150,165,195,0.65);
     padding: 0 0 0 30px; animation: chipIn 0.25s ease both;
@@ -441,7 +426,7 @@
     .seat .face { width: 30px; height: 30px; }
     header { padding: 6px 10px; font-size: 11px; }
     header .sub { display: none; }
-    #replayBtn, #discussBtn, #mapBtn, #dayBtn, #setBtn { display: none; }
+    #discussBtn, #mapBtn, #dayBtn, #setBtn { display: none; }
     #miniBtn { margin-left: auto; }
     #threadBar { display: none; }
     #log { padding: 10px; }
@@ -453,9 +438,7 @@
   <img src="/brand/logo_ico_cute.png" width="20" height="20" draggable="false" style="flex:none">
   <span class="logo">BAGIDEA</span> OFFICE
   <span id="conn"></span>
-  <span id="theater">⏪ REPLAY</span>
-  <button id="replayBtn" title="Replay — re-enact the last 15 minutes in the office">⏪</button>
-  <button id="discussBtn" title="Let agents discuss together" style="margin-left:6px">🗣</button>
+  <button id="discussBtn" title="Let agents discuss together" style="margin-left:auto">🗣</button>
   <button id="mapBtn" title="Top-down office map" style="margin-left:6px">🗺</button>
   <button id="dayBtn" title="World atmosphere" style="margin-left:6px">🌗</button>
   <button id="setBtn" title="Office settings — agents, roles" style="margin-left:6px">⚙</button>
@@ -650,15 +633,6 @@
     const d = document.createElement("div");
     d.className = "chip"; d.innerHTML = html;
     log.appendChild(d);
-    log.scrollTop = log.scrollHeight;
-  }
-  // Sepia film chips while Replay Theater runs.
-  function addTheaterChip(html) {
-    const d = document.createElement("div");
-    d.className = "chip theater";
-    d.innerHTML = "⏪ " + html;
-    log.appendChild(d);
-    while (log.children.length > 220) log.removeChild(log.firstChild);
     log.scrollTop = log.scrollHeight;
   }
   // Tiny inline tool-call marker inside a conversation.
@@ -884,13 +858,8 @@
     const tabs = `<div class="tabs">${T("agents", "AGENTS")}${T("roles", "ROLES")}${T("skills", "SKILLS")}${T("tools", "TOOLS")}${T("threads", "THREADS")}</div>`;
     let bodyHtml = "";
     if (tab === "agents") {
-      const spd = (() => { try { return Number(localStorage.getItem("replaySpeed")) || 8; } catch { return 8; } })();
-      const spdBtn = (v, lbl) =>
-        `<button class="tab ${spd === v ? "active" : ""}" data-spd="${v}">${lbl}</button>`;
       bodyHtml = `<div class="switch ${SOUND ? "on" : ""}" id="sndSw">
           <div class="knob"><\/div> 🔊 Sound effects — เสียงประกอบในโลก office</div>
-        <div class="field" style="margin-top:8px"><label>⏪ REPLAY SPEED</label>
-          <div id="rspd">${spdBtn(4, "x1")}${spdBtn(8, "x2")}${spdBtn(16, "x4")}</div></div>
         <div id="alist"></div><button class="bigbtn" id="newAgent">＋ Hire a new agent</button>`;
     } else if (tab === "skills") {
       bodyHtml = `<div class="switch ${AUTOSKILLS ? "on" : ""}" id="autoSw">
@@ -946,11 +915,6 @@
         await api("/registry/sound", { enabled: SOUND });
         e.currentTarget.classList.toggle("on", SOUND);
       };
-      modalCard.querySelectorAll("#rspd .tab").forEach((b) => (b.onclick = () => {
-        try { localStorage.setItem("replaySpeed", b.dataset.spd); } catch {}
-        modalCard.querySelectorAll("#rspd .tab").forEach((x) =>
-          x.classList.toggle("active", x === b));
-      }));
     } else if (tab === "skills") {
       modalCard.querySelector("#autoSw").onclick = async (e) => {
         await api("/registry/autoskills", { enabled: !AUTOSKILLS });
@@ -1615,33 +1579,9 @@
     if (ev.type === "ui.daylight") { dayMode = ev.hour; return; }
     if (String(ev.type).startsWith("ui.")) return;  // debug beacons aren't agents
     const key = ev.task || ev.agent;
-    if (ev.type === "theater.started") {
-      replayingNow = true;
-      document.getElementById("theater").style.display = "inline";
-      addChip(`⏪ <b>REPLAY THEATER</b> — ฉาย ${ev.events} เหตุการณ์ (กด ⏪ อีกครั้งเพื่อหยุด)`);
-      return;
-    }
-    if (ev.type === "theater.ended") {
-      replayingNow = false;
-      document.getElementById("theater").style.display = "none";
-      addChip(ev.stopped ? "⏪ หยุดฉายแล้ว" : "⏪ จบม้วน — กลับสู่ปัจจุบัน");
-      return;
-    }
-    if (ev.theater) {
-      // The story replays INSIDE the chat pane, timestamped like old film reels.
-      const t = ev.src_ts ? new Date(ev.src_ts).toLocaleTimeString() : "";
-      if (ev.type === "chat.message")
-        addTheaterChip(`${t} · 💬 <b>${nameOf(String(ev.agent || "").split("#")[0])}</b> ${String(ev.text).slice(0, 70)}`);
-      else if (ev.type === "task.progress")
-        addTheaterChip(`${t} · ⚙ ${ev.tool || ""} — ${nameOf(String(ev.agent || "").split("#")[0])}`);
-      else if (ev.type === "task.delegated")
-        addTheaterChip(`${t} · 📋 มอบหมายงานให้ ${nameOf(ev.target)}`);
-      else if (ev.type === "perm.requested")
-        addTheaterChip(`${t} · 🛡 ขอใช้ ${ev.tool}`);
-      else if (ev.type === "subagent.spawned")
-        addTheaterChip(`${t} · 👻 แตกร่าง sub-agent`);
-      return;
-    }
+    // Replay Theater is gone — ignore any stale theater frames from old
+    // journals so they can never animate anything.
+    if (ev.theater || String(ev.type).startsWith("theater.")) return;
     feedRoute(ev);  // the 📡 feed mirrors everything glanceable
 
     // Ghost traffic peels off before anything can mint a rail seat for it.
@@ -1772,28 +1712,9 @@
   }
   document.getElementById("send").onclick = send;
   document.getElementById("inp").addEventListener("keydown", (e) => { if (e.key === "Enter") send(); });
-  let replayingNow = false;
-  function replaySpeed() {
-    try { return Number(localStorage.getItem("replaySpeed")) || 8; } catch { return 8; }
-  }
-  document.getElementById("replayBtn").onclick = async () => {
-    if (replayingNow) {
-      await fetch("/replay/stop", { method: "POST" }).catch(() => {});
-      return;
-    }
-    let r = {};
-    try {
-      r = await fetch("/replay", {
-        method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ minutes: 15, speed: replaySpeed() }),
-      }).then((x) => x.json());
-    } catch {}
-    if (!r.replaying) addChip("⏪ มี replay ฉายอยู่แล้ว — กด ⏪ เพื่อหยุดได้");
-  };
-
   // Top-bar popups (menus, modals, the map…) live where the sidebar slides
   // in — opening any of them tucks the panel away first.
-  for (const bid of ["replayBtn", "discussBtn", "mapBtn", "dayBtn", "setBtn", "sessBtn"]) {
+  for (const bid of ["discussBtn", "mapBtn", "dayBtn", "setBtn", "sessBtn"]) {
     const el = document.getElementById(bid);
     if (el) el.addEventListener("click", () => setSide(false), true);
   }

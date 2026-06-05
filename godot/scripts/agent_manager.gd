@@ -124,15 +124,11 @@ func handle(evt: Dictionary) -> void:
 		return  # our own position stream echoing back — not an agent event
 	if not evt.has("agent") and not evt.has("agents"):
 		return  # agent-less events must never spawn a default "agent" ghost
-	# Replay Theater: the daemon re-broadcasts journal slices time-compressed.
-	# Characters act them out, but the mission board stays in the present.
-	if type == "theater.started":
-		world.set_theater(true)
+	# Replay Theater was removed — stale theater frames from old journals
+	# must never animate anything.
+	if type.begins_with("theater.") or evt.get("theater", false):
 		return
-	if type == "theater.ended":
-		world.set_theater(false)
-		return
-	var theatrical: bool = evt.get("theater", false)
+	var theatrical: bool = false  # kept so downstream guards stay untouched
 
 	# Sub-agent traffic → ghost clones, never real hires. Ghosts live only in
 	# the present: journal replays and theater never resurrect them.

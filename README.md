@@ -61,7 +61,6 @@ Not a dashboard. Not a chat window. A **world** that renders the true state of y
 - **Self-splitting sub-agents**: every session is told it may end a reply with `SUB: <job>` lines (2–4) when the request parallelizes — the daemon strips the protocol, spawns parallel clone sessions with the parent's persona + tools, records each in a labeled 👻 session, and resumes the parent for a final synthesis once all ghosts report back (a stuck ghost is reaped after 6 min, so synthesis always happens)
 - **Claude Code hooks integration**: any Claude Code session in this project reports its tool calls — your real work animates the Director automatically
 - **Permission broker**: dangerous tools from adapter sessions are held until you approve
-- **Replay Theater**: `POST /replay` re-enacts the last N minutes time-compressed, in sepia
 
 ### 🛡️ Spatialized security
 When an agent needs a dangerous tool:
@@ -79,7 +78,7 @@ Served by the daemon at `http://127.0.0.1:8787/` — best experienced through th
 - **🗺 Live map**: a real orthographic floorplan render with live agent icons (face, state ring, name) — click one to chat with it
 - **🧵 Threads**: per-conversation chat panes — switching threads or agents loads that conversation's history; a thread bar shows where you are; meetings (🗣 with participant faces) and sub-agent jobs (👻 with the owner's face + ✓/✗/⏳ status) are readable forever, streaming live while they run
 - **🗣 Discussions**: launch agent-to-agent meetings
-- **🌗 Atmosphere picker**, **⏪ Replay**, collapsible **🛡 Security/Mission sidebar** with a pending-count badge that summons itself when an approval arrives
+- **🌗 Atmosphere picker**, slide-over **🛡 Security/Mission/Office-Log sidebar** (edge handle pulses when an approval is waiting; pops open on arrival)
 - Circular **chat head** (Messenger-style, never steals focus) + system tray (Start with Windows, Exit)
 
 ## Architecture
@@ -294,7 +293,6 @@ node daemon\send.js agent.offline rin
 | `POST /assist/prompt` `{name, role, brief}` | ✨ prompt copilot |
 | `POST /discuss` `{agents[], topic, rounds}` | agent-to-agent meeting |
 | `POST /ui/daylight` `{hour: 17.5 \| "auto"}` | atmosphere override |
-| `POST /replay` `{minutes, speed}` | Replay Theater |
 | `POST /event` | push any OEP event (custom integrations) |
 | `GET /map/bg` · `POST /pos` | live map plumbing |
 | `POST /perm/request` (long-poll) · `POST /perm/respond` | permission broker |
@@ -316,7 +314,6 @@ One JSON event per WebSocket message / journal line: `{type, agent, task?, tool?
 | `ceo.summon` / `task.delegated` | the Director's chain-of-command walks |
 | `roster.sync` / `roster.removed` | registry → world (spawn/update/despawn) |
 | `ui.daylight` | atmosphere override |
-| `theater.started` / `theater.ended` | Replay Theater sepia |
 
 Push your own events from anything: `POST /event` — that's the whole integration
 story for custom agents. New WS clients receive a journal replay plus a fresh
@@ -344,7 +341,7 @@ this makes them employable"*).
 - [x] Characters, sci-fi furniture kit, glass-walled shell, countryside
 - [x] Meeting Room choreography, Server Room, Dormitories, Recreation Room (dog!)
 - [x] One-exe suite: chat head + overlay + tray + auto-start + single-instance
-- [x] Replay Theater + live meeting whiteboard
+- [x] Live meeting whiteboard
 - [x] Agent registry: hire/edit/delete, avatars, auras, ✨ prompt copilot
 - [x] Skills library + Hermes-style auto-learning; tools + MCP servers
 - [x] Live top-down map, chat threads with history, CEO chain of command, discussions
