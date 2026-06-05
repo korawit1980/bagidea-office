@@ -16,6 +16,7 @@ var ghost_desks_free: Array[int] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
 var ceo_hold_until := 0.0  # the boss stands still while giving/receiving work
 var _tv_watchers := 0
 var supervising := {}  # delegate id -> {ghost: Sprite3D or null} (main keeps tabs)
+var awaiting_delivery := {}  # delegate id -> true (walks the result to main)
 var desk_pool: Array[String] = ["desk1", "desk2", "desk3", "desk4", "desk5", "desk6"]
 # Idle agents spread across the cafeteria AND the recreation room (TV,
 # games, the ball corner, the garden) — the office feels lived-in.
@@ -197,9 +198,13 @@ func handle(evt: Dictionary) -> void:
 				_board_clear_later(task)
 				_end_supervision(id)
 			if a.tasks.is_empty():
-				_finish(a, "done ✓")
+				if awaiting_delivery.has(id) and id != "main":
+					_deliver_to_main(a)  # walk the finished work to the boss's boss
+				else:
+					_finish(a, "done ✓")
 		"task.failed":
 			a.tasks.erase(task)
+			awaiting_delivery.erase(id)  # nothing to deliver
 			_fx(a, "failure")
 			if not theatrical:
 				Sfx.play("buzz")
@@ -253,8 +258,7 @@ func handle(evt: Dictionary) -> void:
 				ceo.walk_to([ceo.position])  # boss stops mid-stride to give the order
 				ceo.set_status("สั่งงาน 🗣")
 				Fx.spawn(ceo, "heart", Vector3(0, 1.3, 0))
-				a.node.follow(ceo, Vector3(1.1, 0, 0.6))
-				_unfollow_later(a, 28.0)
+				_tail_ceo(a)
 		"task.delegated":
 			# ...then walks to the assignee, hands the work over, and STAYS
 			# on their heels until they report back. More than one delegate?
@@ -266,11 +270,24 @@ func handle(evt: Dictionary) -> void:
 				Sfx.play("blip")
 			if agents.has(tgt) and not supervising.has(tgt):
 				agents[tgt].node.set_status("รับงานใหม่ ✏")
+				awaiting_delivery[tgt] = true  # they'll walk the result back
 				if supervising.is_empty():
 					supervising[tgt] = {"ghost": null}
 					_supervise(tgt, a.node)
 				elif supervising.size() < 4:
 					_spawn_supervisor(tgt)
+		"reminder":
+			# The Director personally walks over to remind the boss.
+			if not theatrical:
+				Sfx.play("ding")
+				_maybe_focus(a.node, 0.8, 8.0)
+			a.node.set_status("🔔 " + str(evt.get("text", "เตือนนัด")).left(24))
+			if is_instance_valid(ceo):
+				ceo_hold_until = Time.get_ticks_msec() / 1000.0 + 12.0
+				a.node.walk_to(world.path_between(a.node.position,
+					ceo.position + Vector3(-1.15, 0, 0.6)))
+				Fx.spawn(ceo, "heart", Vector3(0, 1.3, 0))
+			_clear_status_later(a, 10.0)
 		"ceo.report":
 			# The round trip closes: the Director walks the summary to the boss.
 			if not theatrical:
@@ -518,6 +535,7 @@ func _ensure(id: String) -> Dictionary:
 	var a := {"node": node, "state": "idle", "desk": "", "bed": "", "id": id, "tasks": {}}
 	agents[id] = a
 	# New hires teleport in — a little sci-fi warp at the door.
+	Sfx.play("door_in")
 	Fx.spawn(node, "warp_in", Vector3(0, -0.2, 0), 0.022)
 	# The main agent heads to the executive office; everyone else idles in cafe.
 	_walk(node, "exec_c" if id == "main" else _next_seat())
@@ -534,6 +552,7 @@ func _to_dorm(id: String) -> void:
 	for t in a.tasks:
 		world.board_set(t, "none")
 	a.tasks.clear()
+	Sfx.play("door_out")
 	_set_state(a, "offline")
 	a.node.set_status("offline 💤")
 	# Reserve a bunk (8 total); overflow rests in the recreation room.
@@ -546,16 +565,39 @@ func _to_dorm(id: String) -> void:
 func _to_desk(a: Dictionary) -> void:
 	if a.desk == "":
 		if a.id == "main":
-			a.desk = "ceo_desk"  # the main agent runs the company from exec
+			a.desk = "lead_desk"  # the Director's own workstation
 		else:
 			a.desk = desk_pool.pop_front() if desk_pool.size() > 0 else "ops_c"
 	_set_state(a, "working")
 	a.node.set_status("thinking…")
-	# Taking an order in person: stay with the CEO while planning — the
-	# exec computer can wait until the hand-overs are done.
+	# Taking an order in person: stay with the CEO while planning — his
+	# own computer can wait until the hand-overs are done.
 	if a.id == "main" and Time.get_ticks_msec() / 1000.0 < float(a.get("hold_at_ceo", 0.0)):
 		return
 	_walk(a.node, a.desk)
+
+## Finished delegated work gets WALKED to the Director — a real hand-back.
+func _deliver_to_main(a: Dictionary) -> void:
+	awaiting_delivery.erase(a.id)
+	_release_desk(a)
+	_set_state(a, "idle")
+	a.node.set_status("เอางานไปส่ง 📦")
+	if agents.has("main") and is_instance_valid(agents["main"].node):
+		var m: Sprite3D = agents["main"].node
+		var d: float = a.node.walk_to(world.path_between(a.node.position,
+			m.position + Vector3(0.9, 0, 0.5)))
+		await get_tree().create_timer(d + 0.4).timeout
+		if is_instance_valid(a.node):
+			Sfx.play("page")
+			Fx.spawn(a.node, "sparkle", Vector3(0, 0.5, 0), 0.035)
+			a.node.set_status("ส่งงานแล้ว ✓")
+			if is_instance_valid(m):
+				m.set_status("รับงานจาก " + str(a.node.agent_name) + " 📦")
+				_clear_status_later(agents["main"], 5.0)
+	await get_tree().create_timer(2.5).timeout
+	if a.state == "idle" and is_instance_valid(a.node):
+		_walk(a.node, _next_seat())
+		_clear_status_later(a, 3.0)
 
 func _finish(a: Dictionary, label: String) -> void:
 	a.node.set_status(label)
@@ -685,32 +727,78 @@ func _main_wander_loop() -> void:
 
 # ---------------------------------------------------------------- supervision
 # The Director keeps tabs on delegated work in person: he shadows the first
-# delegate; extra assignments get a translucent supervisor clone each. When
-# a delegate's task ends, its shadow dissolves (or the Director lets go).
+# delegate; extra assignments get a translucent supervisor clone each. Once
+# the delegate settles into work ("thinking" done), the shadow lets go —
+# and when the work is finished, the delegate walks the result back to him.
 
-## The CEO talk is over: stop tailing the boss and head to the desk.
-func _unfollow_later(a: Dictionary, delay: float) -> void:
-	await get_tree().create_timer(delay).timeout
-	if is_instance_valid(a.node) and a.node.follow_node == ceo:
-		a.node.unfollow()
-		if a.state == "working":
-			_walk(a.node, a.desk if a.desk != "" else "ceo_desk")
+## Keep `follower` glued to `target` without EVER cutting walls: steer at
+## close range, A* re-route when far. Runs until `until.call()` is true.
+func _tail_loop(follower: Sprite3D, target: Node3D, offset: Vector3, until: Callable) -> void:
+	var next_path := 0.0
+	while is_instance_valid(follower) and is_instance_valid(target) and not until.call():
+		var now := Time.get_ticks_msec() / 1000.0
+		var dist := follower.position.distance_to(target.position + offset)
+		if dist > 3.2:
+			if now >= next_path:
+				next_path = now + 2.2  # don't restart the walk every tick
+				follower.unfollow()
+				follower.walk_to(world.path_between(follower.position, target.position + offset))
+		elif follower.follow_node != target:
+			follower.follow(target, offset)
+		await get_tree().create_timer(0.6).timeout
+	if is_instance_valid(follower) and follower.follow_node == target:
+		follower.unfollow()
 
-## Shadow a delegate until their task ends — live tailing, not spot checks.
+## The Director tails the CEO for the whole conversation, then heads to
+## his own workstation if he still has work.
+func _tail_ceo(a: Dictionary) -> void:
+	var a_ref := a
+	await _tail_loop(a.node, ceo, Vector3(1.1, 0, 0.6), func() -> bool:
+		return Time.get_ticks_msec() / 1000.0 >= float(a_ref.get("hold_at_ceo", 0.0)) \
+			or a_ref.state != "working")
+	if is_instance_valid(a.node) and a.state == "working":
+		_walk(a.node, a.desk if a.desk != "" else "lead_desk")
+
+## Shadow a delegate while they receive the work — until they settle into
+## working (thinking done) for a few seconds. Then let go.
 func _supervise(tgt: String, follower: Sprite3D) -> void:
-	await get_tree().create_timer(4.5).timeout  # let the hand-over walk land
+	await get_tree().create_timer(4.0).timeout  # let the hand-over walk start
 	if not supervising.has(tgt) or not agents.has(tgt) \
 			or not is_instance_valid(follower):
+		supervising.erase(tgt)
 		return
-	follower.follow(agents[tgt].node, Vector3(-1.05, 0, 0.6))
-	while supervising.has(tgt) and is_instance_valid(follower):
-		# The Director drops the tail when his own work calls.
-		if follower == agents.get("main", {}).get("node") \
-				and not agents["main"].tasks.is_empty():
-			supervising.erase(tgt)
-			follower.unfollow()
-			return
-		await get_tree().create_timer(1.0).timeout
+	var settled := {"t": 0.0}
+	var is_main: bool = follower == agents.get("main", {}).get("node")
+	await _tail_loop(follower, agents[tgt].node, Vector3(-1.05, 0, 0.6), func() -> bool:
+		if not supervising.has(tgt) or not agents.has(tgt):
+			return true
+		if is_main and not agents["main"].tasks.is_empty():
+			return true  # his own work calls
+		if agents[tgt].state == "working":
+			if settled.t == 0.0:
+				settled.t = Time.get_ticks_msec() / 1000.0
+			return Time.get_ticks_msec() / 1000.0 - settled.t > 6.0
+		settled.t = 0.0
+		return false)
+	# Thinking done (or duty calls): the shadow lets go.
+	var sup: Dictionary = supervising.get(tgt, {})
+	supervising.erase(tgt)
+	var g: Sprite3D = sup.get("ghost")
+	if g != null and is_instance_valid(g):
+		_dissolve_supervisor(g)
+	elif is_main and agents.has("main") and agents["main"].tasks.is_empty():
+		_finish(agents["main"], "มอบหมายแล้ว ✓")
+
+func _dissolve_supervisor(g: Sprite3D) -> void:
+	g.unfollow()
+	Sfx.play("whoosh")
+	var dur := 0.0
+	if agents.has("main") and is_instance_valid(agents["main"].node):
+		dur = g.walk_to(world.path_between(g.position, agents["main"].node.position))
+	await get_tree().create_timer(maxf(dur, 0.1) + 0.3).timeout
+	if is_instance_valid(g):
+		Fx.spawn(world, "warp_out", g.position + Vector3(0, -0.2, 0), 0.022)
+		g.ghost_dissolve()
 
 ## A translucent clone of the Director splits off to watch one delegate.
 func _spawn_supervisor(tgt: String) -> void:
@@ -734,27 +822,17 @@ func _spawn_supervisor(tgt: String) -> void:
 	supervising[tgt] = {"ghost": g}
 	_supervise(tgt, g)
 
-## A delegate finished: dissolve their shadow back into the Director.
+## A delegate finished while still shadowed (fast job): clean up the tail.
 func _end_supervision(id: String) -> void:
 	if not supervising.has(id):
 		return
 	var sup: Dictionary = supervising[id]
 	supervising.erase(id)
-	var g: Sprite3D = sup.ghost
-	if g == null or not is_instance_valid(g):
-		# main himself was the shadow — let go and stroll off
-		if agents.has("main") and is_instance_valid(agents["main"].node):
-			agents["main"].node.unfollow()
-		return
-	g.unfollow()
-	Sfx.play("whoosh")
-	var dur := 0.0
-	if agents.has("main") and is_instance_valid(agents["main"].node):
-		dur = g.walk_to(world.path_between(g.position, agents["main"].node.position))
-	await get_tree().create_timer(maxf(dur, 0.1) + 0.3).timeout
-	if is_instance_valid(g):
-		Fx.spawn(world, "warp_out", g.position + Vector3(0, -0.2, 0), 0.022)
-		g.ghost_dissolve()
+	var g: Sprite3D = sup.get("ghost")
+	if g != null and is_instance_valid(g):
+		_dissolve_supervisor(g)
+	elif agents.has("main") and is_instance_valid(agents["main"].node):
+		agents["main"].node.unfollow()
 
 # ---------------------------------------------------------------- idle life
 # Idle agents actually LIVE in the office: watch TV (it really turns on),

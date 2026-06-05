@@ -1,7 +1,24 @@
 extends Node
-## Procedural sound effects (autoload "Sfx") — tiny synthesized WAVs, no
-## audio assets needed. Cute blips and chimes for office life; the master
-## toggle lives in the overlay settings (ui.sound / registry).
+## Sound effects (autoload "Sfx"). Prefers the real "(Not A Placeholder)
+## Free Sounds Pack" WAVs (gitignored — see README); falls back to tiny
+## synthesized tones when the pack is missing. Master toggle lives in the
+## overlay settings (ui.sound / registry).
+
+const PACK := "res://assets/sounds/"
+## name -> pack file (crisp, short picks — interesting, never annoying).
+const PACK_MAP := {
+	"blip": "Interface 1-1.wav",            # message tick
+	"blip2": "Interface 3-3.wav",           # cute interaction
+	"chime": "Magical Interface 5-1.wav",   # task done
+	"ding": "Sci-Fi Interface 8-1.wav",     # approval bell
+	"buzz": "Hit Generic 5-1.wav",          # failure / denied
+	"whoosh": "Whoosh 4-1.wav",             # ghost in/out
+	"pop": "Hit Generic 2-1.wav",           # ball kick
+	"tada": "Special Collectible 9-1.wav",  # skill learned / fanfare
+	"door_in": "Door Open 4-1.wav",         # someone walks in / wakes
+	"door_out": "Door Close 4-1.wav",       # off to the bunks
+	"page": "Book Page 1-2.wav",            # notes & paperwork
+}
 
 var enabled := true
 
@@ -10,19 +27,29 @@ var _pool: Array[AudioStreamPlayer] = []
 var _last_play := {}  # name -> ticks ms (rate limiting)
 
 func _ready() -> void:
+	# Synth fallbacks first, then the real pack overrides what it can.
 	_streams = {
-		"blip": _tone(660.0, 0.07, 22.0),            # soft message tick
-		"blip2": _tone(880.0, 0.09, 18.0),           # cute interaction
-		"chime": _chord([1046.5, 1318.5], 0.34, 9.0),  # task done — major third
-		"ding": _chord([1568.0], 0.3, 8.0),          # approval bell
-		"buzz": _tone(165.0, 0.22, 10.0, "square"),  # failure / denied
-		"whoosh": _tone(0.0, 0.3, 9.0, "noise"),     # ghost in/out
-		"pop": _tone(240.0, 0.07, 30.0),             # ball kick
-		"tada": _chord([784.0, 988.0, 1175.0], 0.5, 6.0),  # skill learned
+		"blip": _tone(660.0, 0.07, 22.0),
+		"blip2": _tone(880.0, 0.09, 18.0),
+		"chime": _chord([1046.5, 1318.5], 0.34, 9.0),
+		"ding": _chord([1568.0], 0.3, 8.0),
+		"buzz": _tone(165.0, 0.22, 10.0, "square"),
+		"whoosh": _tone(0.0, 0.3, 9.0, "noise"),
+		"pop": _tone(240.0, 0.07, 30.0),
+		"tada": _chord([784.0, 988.0, 1175.0], 0.5, 6.0),
+		"door_in": _tone(330.0, 0.12, 14.0),
+		"door_out": _tone(262.0, 0.12, 14.0),
+		"page": _tone(0.0, 0.08, 26.0, "noise"),
 	}
+	for key in PACK_MAP:
+		var path := ProjectSettings.globalize_path(PACK + PACK_MAP[key])
+		if FileAccess.file_exists(path):
+			var wav := AudioStreamWAV.load_from_file(path)
+			if wav:
+				_streams[key] = wav
 	for i in 6:
 		var p := AudioStreamPlayer.new()
-		p.volume_db = -10.0
+		p.volume_db = -11.0
 		p.bus = "Master"
 		add_child(p)
 		_pool.append(p)

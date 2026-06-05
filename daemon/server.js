@@ -80,7 +80,18 @@ function rosterEvt() {
   return { type: "roster.sync", agents: reg.agents, roles: reg.roles,
     tools: reg.tools, builtinTools: BUILTIN_TOOLS, mcp: reg.mcpServers,
     skills: reg.skills, autoSkills: reg.autoSkills !== false,
-    sound: reg.sound !== false };
+    sound: reg.sound !== false, heartbeatMin: Number(reg.heartbeatMin || 0) };
+}
+
+// Structured persona → one compiled system prompt (editor v2 fields).
+function personaText(a) {
+  let p = a.prompt || "";
+  const px = a.persona || {};
+  if (px.expertise) p += `\n\nความเชี่ยวชาญ/ขอบเขตงาน:\n${px.expertise}`;
+  if (px.personality) p += `\n\nบุคลิกและน้ำเสียง:\n${px.personality}`;
+  if (px.language) p += `\n\nภาษาหลักที่ใช้ตอบ: ${px.language}`;
+  if (px.rules) p += `\n\nกฎการทำงาน (ต้องเคารพเสมอ):\n${px.rules}`;
+  return p;
 }
 function pushRoster() { broadcast(rosterEvt(), false); }
 
@@ -207,6 +218,143 @@ function broadcast(evt, journal = true) {
   if (evt.type !== "world.pos") console.log("[oep] →", json);
 }
 
+// ---------------------------------------------------------------- office ops
+// Standing work orders (jobs), the shared note board, and the calendar —
+// plus the Director's heartbeat. One 30-second scheduler ticks everything.
+
+const JOBS = path.join(__dirname, "jobs.json");
+const NOTES = path.join(__dirname, "notes.json");
+const CAL = path.join(__dirname, "calendar.json");
+const NOTES_MD = path.join(WORKSPACE, "notes.md");
+
+function loadJson(file, fallback) {
+  try { return JSON.parse(fs.readFileSync(file, "utf8")); } catch { return fallback; }
+}
+let jobs = loadJson(JOBS, []);    // {id, agent, prompt, mode, at, time, daily, everyMin, enabled, lastRun, lastDay, done, sessionKey}
+let notes = loadJson(NOTES, []);  // {id, who, text, ts}
+let cal = loadJson(CAL, []);      // {id, title, at, remindMin, notified}
+const saveJobs = () => fs.writeFileSync(JOBS, JSON.stringify(jobs, null, 2));
+const saveCal = () => fs.writeFileSync(CAL, JSON.stringify(cal, null, 2));
+
+// The note board lives twice: notes.json for the UI, notes.md inside the
+// agents' workspace so they can READ it and APPEND bullets themselves.
+let writingNotesMd = false;
+function saveNotes() {
+  fs.writeFileSync(NOTES, JSON.stringify(notes, null, 2));
+  writingNotesMd = true;
+  const md = "# Office Notes — กระดานโน้ตกลาง\n" +
+    "(agents: อ่านได้ และเพิ่มบรรทัด \"- ข้อความ\" เพื่อฝากโน้ตถึง CEO ได้เลย)\n\n" +
+    notes.map((n) => `- ${n.text}`).join("\n") + "\n";
+  fs.writeFileSync(NOTES_MD, md);
+  setTimeout(() => { writingNotesMd = false; }, 1500);
+  broadcast({ type: "notes.changed", count: notes.length }, false);
+}
+if (!fs.existsSync(NOTES_MD)) saveNotes();
+fs.watchFile(NOTES_MD, { interval: 3000 }, () => {
+  if (writingNotesMd) return;
+  // An agent edited the board: bullet lines become the new truth.
+  try {
+    const lines = fs.readFileSync(NOTES_MD, "utf8").split("\n")
+      .map((l) => l.match(/^\s*[-*]\s+(.+)$/)).filter(Boolean).map((m) => m[1].trim());
+    notes = lines.map((text) => {
+      const old = notes.find((n) => n.text === text);
+      return old || { id: "n" + Date.now() + Math.floor(Math.random() * 999),
+        who: "agent", text, ts: Date.now() };
+    });
+    fs.writeFileSync(NOTES, JSON.stringify(notes, null, 2));
+    broadcast({ type: "notes.changed", count: notes.length, by: "agent" });
+  } catch {}
+});
+
+// ---- job runner: per-agent queue + a global cap so the machine breathes.
+const agentBusy = new Set();
+const jobQueue = [];
+function dispatchJob(job) {
+  if (agentBusy.has(job.agent) || agentBusy.size >= 2) {
+    if (!jobQueue.includes(job)) jobQueue.push(job);
+    return;
+  }
+  agentBusy.add(job.agent);
+  job.lastRun = Date.now();
+  if (job.mode === "now") job.done = true;
+  saveJobs();
+  broadcast({ type: "job.started", agent: job.agent, title: job.prompt.slice(0, 60), job: job.id });
+  runClaude(job.agent, job.prompt, {
+    session: job.sessionKey || "new",
+    logPrompt: "📋 [งานที่สั่งไว้] " + job.prompt,
+    onEntry: (key) => { job.sessionKey = key; saveJobs(); },
+    onDone: () => {
+      agentBusy.delete(job.agent);
+      const next = jobQueue.shift();
+      if (next) dispatchJob(next);
+    },
+  });
+}
+
+function jobDue(job, now) {
+  if (job.enabled === false || job.done) return false;
+  if (job.mode === "every")
+    return !job.lastRun || now - job.lastRun >= (job.everyMin || 10) * 60000;
+  if (job.mode === "at") {
+    if (job.daily && job.time) {
+      const [h, m] = job.time.split(":").map(Number);
+      const today = new Date(); today.setHours(h, m, 0, 0);
+      const dayKey = new Date().toDateString();
+      return now >= today.getTime() && job.lastDay !== dayKey;
+    }
+    return job.at && now >= job.at && !job.lastRun;
+  }
+  return false;
+}
+
+// ---- the Director's heartbeat: a periodic overview pass. He pings the
+// owner ONLY when something deserves it; "OK" stays silent.
+let lastHeartbeat = Date.now();
+function heartbeat() {
+  lastHeartbeat = Date.now();
+  const upcoming = cal.filter((c) => c.at > Date.now() && c.at < Date.now() + 12 * 3600000)
+    .sort((a, b) => a.at - b.at).slice(0, 6)
+    .map((c) => `- ${c.title} @ ${new Date(c.at).toLocaleString("th-TH")}`).join("\n") || "(ว่าง)";
+  const standing = jobs.filter((j) => !j.done && j.enabled !== false).slice(0, 8)
+    .map((j) => `- [${j.mode}] ${j.agent}: ${j.prompt.slice(0, 60)}`).join("\n") || "(ไม่มี)";
+  const board = notes.slice(-8).map((n) => `- ${n.text}`).join("\n") || "(ว่าง)";
+  runClaude("main",
+    `รอบตรวจความเรียบร้อยของ Director (ตอนนี้ ${new Date().toLocaleString("th-TH")}):\n\n` +
+    `นัดหมาย 12 ชม.ข้างหน้า:\n${upcoming}\n\nงานที่สั่งค้างไว้:\n${standing}\n\n` +
+    `กระดานโน้ต:\n${board}\n\n` +
+    `ถ้ามีสิ่งที่ CEO ควรรู้ตอนนี้ (นัดใกล้ถึง งานสะดุด โน้ตที่ควรเห็น) ` +
+    `ให้เขียนข้อความแจ้งสั้นๆ อ่านง่าย. ถ้าทุกอย่างเรียบร้อยและไม่มีอะไรต้องรบกวน ` +
+    `ให้ตอบคำเดียวว่า OK`,
+    { noSub: true, logPrompt: "💓 รอบตรวจความเรียบร้อย",
+      filterText: (t) => (/^\s*OK\.?\s*$/i.test(t) ? "" : t) });
+}
+
+// ---- 30-second scheduler: jobs, reminders, heartbeat.
+setInterval(() => {
+  const now = Date.now();
+  for (const job of jobs) {
+    if (jobDue(job, now)) {
+      if (job.mode === "at" && job.daily) job.lastDay = new Date().toDateString();
+      dispatchJob(job);
+    }
+  }
+  for (const c of cal) {
+    if (!c.notified && now >= c.at - (c.remindMin || 10) * 60000 && now < c.at + 300000) {
+      c.notified = true;
+      saveCal();
+      broadcast({ type: "reminder", agent: "main", text: c.title, at: c.at });
+      runClaude("main",
+        `แจ้งเตือนนัดหมายให้ CEO เดี๋ยวนี้: "${c.title}" เวลา ` +
+        `${new Date(c.at).toLocaleString("th-TH")} (อีกประมาณ ${Math.max(1, Math.round((c.at - now) / 60000))} นาที). ` +
+        `เขียนข้อความเตือนสั้นๆ เป็นกันเอง 1-2 ประโยค`,
+        { noSub: true, logPrompt: `🔔 เตือนนัด: ${c.title}` });
+    }
+  }
+  const hb = Number(reg.heartbeatMin || 0);
+  if (hb > 0 && now - lastHeartbeat >= hb * 60000 && agentBusy.size === 0)
+    heartbeat();
+}, 30000);
+
 // ---------------------------------------------------------------- adapter
 
 // Spawns a headless Claude Code session, translating stream-json → OEP.
@@ -249,6 +397,7 @@ function runClaude(agent, prompt, opts = {}) {
   entry.log.push({ who: "you", text: String(opts.logPrompt || prompt).slice(0, 4000), ts: Date.now() });
   while (entry.log.length > 200) entry.log.shift();
   saveSess();
+  if (opts.onEntry) try { opts.onEntry(entry.key); } catch {}
 
   broadcast({ type: "task.started", agent, task, session: entry.key });
 
@@ -273,12 +422,14 @@ function runClaude(agent, prompt, opts = {}) {
     tools += (tools ? "," : "") + mcpNames.map((n) => `mcp__${n}`).join(",");
   }
   let preamble = "";
-  if (isFresh && a && (a.prompt || (a.skills || []).length)) {
-    preamble = `<persona>\nYou are "${a.name}" (${a.role}).\n${a.prompt || ""}\n`;
+  if (isFresh && a && (a.prompt || a.persona || (a.skills || []).length)) {
+    preamble = `<persona>\nYou are "${a.name}" (${a.role}).\n${personaText(a)}\n`;
     for (const sid of a.skills || []) {
       const sk = reg.skills[sid];
       if (sk) preamble += `\n<skill name="${sk.name}">\n${sk.content}\n</skill>\n`;
     }
+    preamble += `\nกระดานโน้ตกลางของออฟฟิศ: ไฟล์ notes.md ใน workspace — ` +
+      `อ่านได้ และเพิ่มบรรทัด "- ข้อความ" เพื่อฝากโน้ตถึง CEO ได้\n`;
     preamble += "</persona>\n\n";
   }
 
@@ -736,6 +887,17 @@ const server = http.createServer((req, res) => {
       res.end(data);
     });
 
+  } else if (req.method === "GET" && req.url.startsWith("/sfx/")) {
+    // UI sounds from the (gitignored) sound pack — overlay falls back to a
+    // tiny synth when a file is missing.
+    const name = decodeURIComponent(req.url.slice(5)).replace(/[\\/]|\.\./g, "");
+    const f = path.join(__dirname, "..", "godot", "assets", "sounds", name);
+    fs.readFile(f, (e, data) => {
+      if (e) { res.writeHead(404); res.end(); return; }
+      res.writeHead(200, { "content-type": "audio/wav", "cache-control": "max-age=86400" });
+      res.end(data);
+    });
+
   } else if (req.method === "GET" && /^\/char\/npc([1-9]|1[0-2])\.png$/.test(req.url)) {
     // Character sheets for overlay portraits (404 → CSS falls back to initials)
     const f = path.join(__dirname, "..", "godot", "assets", "characters", "npc",
@@ -857,6 +1019,7 @@ const server = http.createServer((req, res) => {
         const p = JSON.parse(body);
         const id = p.id || slugId(p.name);
         const cur = reg.agents[id] || { skills: [], tools: [] };
+        const px = p.persona || cur.persona || {};
         reg.agents[id] = {
           ...cur,
           name: String(p.name || cur.name || id).slice(0, 40),
@@ -864,6 +1027,13 @@ const server = http.createServer((req, res) => {
           avatar: Math.min(Math.max(Number(p.avatar) || cur.avatar || 1, 1), 12),
           aura: String(p.aura !== undefined ? p.aura : cur.aura || "").slice(0, 16),
           prompt: String(p.prompt !== undefined ? p.prompt : cur.prompt || "").slice(0, 8000),
+          persona: {
+            expertise: String(px.expertise || "").slice(0, 2000),
+            personality: String(px.personality || "").slice(0, 2000),
+            language: String(px.language || "").slice(0, 80),
+            rules: String(px.rules || "").slice(0, 2000),
+          },
+          tier: Math.min(Math.max(Number(p.tier !== undefined ? p.tier : cur.tier) || 3, 1), 3),
           skills: Array.isArray(p.skills) ? p.skills : cur.skills || [],
           tools: Array.isArray(p.tools) ? p.tools : cur.tools || [],
         };
@@ -952,6 +1122,98 @@ const server = http.createServer((req, res) => {
       }
     });
 
+  } else if (req.method === "GET" && req.url === "/jobs") {
+    res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
+    res.end(JSON.stringify({ jobs }));
+
+  } else if (req.method === "POST" && req.url === "/jobs") {
+    // Create a standing work order: now / at (one-shot or daily) / every N.
+    readBody(req, (body) => {
+      try {
+        const p = JSON.parse(body);
+        if (!p.agent || !reg.agents[p.agent] || p.agent === "ceo") throw new Error("bad agent");
+        if (!p.prompt) throw new Error("no prompt");
+        const job = {
+          id: "j" + Date.now(),
+          agent: p.agent,
+          prompt: String(p.prompt).slice(0, 4000),
+          mode: ["now", "at", "every"].includes(p.mode) ? p.mode : "now",
+          at: Number(p.at) || 0,
+          time: String(p.time || "").slice(0, 5),
+          daily: !!p.daily,
+          everyMin: Math.max(5, Number(p.everyMin) || 10),  // floor: 5 min
+          enabled: true,
+          created: Date.now(),
+        };
+        jobs.push(job);
+        saveJobs();
+        if (job.mode === "now") dispatchJob(job);
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ id: job.id }));
+      } catch (e) { res.writeHead(400); res.end(String(e.message)); }
+    });
+
+  } else if (req.method === "POST" && req.url === "/jobs/update") {
+    readBody(req, (body) => {
+      try {
+        const p = JSON.parse(body);
+        const job = jobs.find((j) => j.id === p.id);
+        if (!job) { res.writeHead(404); return res.end("unknown job"); }
+        if (p.remove) jobs = jobs.filter((j) => j.id !== p.id);
+        else if (p.enabled !== undefined) job.enabled = !!p.enabled;
+        saveJobs();
+        res.writeHead(200); res.end("ok");
+      } catch (e) { res.writeHead(400); res.end(String(e.message)); }
+    });
+
+  } else if (req.method === "GET" && req.url === "/notes") {
+    res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
+    res.end(JSON.stringify({ notes }));
+
+  } else if (req.method === "POST" && req.url === "/notes") {
+    readBody(req, (body) => {
+      try {
+        const p = JSON.parse(body);
+        if (p.remove) notes = notes.filter((n) => n.id !== p.remove);
+        else if (p.text) notes.push({ id: "n" + Date.now(), who: p.who || "you",
+          text: String(p.text).slice(0, 500), ts: Date.now() });
+        else throw new Error("no text");
+        saveNotes();
+        res.writeHead(200); res.end("ok");
+      } catch (e) { res.writeHead(400); res.end(String(e.message)); }
+    });
+
+  } else if (req.method === "GET" && req.url === "/calendar") {
+    res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
+    res.end(JSON.stringify({ cal }));
+
+  } else if (req.method === "POST" && req.url === "/calendar") {
+    readBody(req, (body) => {
+      try {
+        const p = JSON.parse(body);
+        if (p.remove) cal = cal.filter((c) => c.id !== p.remove);
+        else {
+          const at = Number(p.at) || Date.parse(p.at);
+          if (!p.title || !at) throw new Error("need title + at");
+          cal.push({ id: "c" + Date.now(), title: String(p.title).slice(0, 120),
+            at, remindMin: Math.max(1, Number(p.remindMin) || 10), notified: false });
+        }
+        saveCal();
+        res.writeHead(200); res.end("ok");
+      } catch (e) { res.writeHead(400); res.end(String(e.message)); }
+    });
+
+  } else if (req.method === "POST" && req.url === "/registry/heartbeat") {
+    // Director overview cadence: 0 = off, otherwise minutes between passes.
+    readBody(req, (body) => {
+      try {
+        reg.heartbeatMin = Math.max(0, Number(JSON.parse(body).min) || 0);
+        saveReg();
+        pushRoster();
+        res.writeHead(200); res.end("ok");
+      } catch { res.writeHead(400); res.end("bad json"); }
+    });
+
   } else if (req.method === "POST" && req.url === "/registry/sound") {
     // World sound effects on/off (persisted + live ui.sound broadcast).
     readBody(req, (body) => {
@@ -1007,14 +1269,21 @@ const server = http.createServer((req, res) => {
       try {
         const { name = "Agent", role = "Specialist", brief = "" } = JSON.parse(body);
         const draft = await claudeText(
-          `Draft a system prompt for an AI agent that works in a software office.\n` +
+          `Design a complete persona for an AI agent in a software office.\n` +
           `Agent name: ${name}\nJob title: ${role}\nOwner's brief: ${brief}\n\n` +
-          `Rules: 4-8 sentences. Second person ("You are..."). Cover: mission, ` +
-          `expertise, working style, what good output looks like. Match the ` +
-          `language of the owner's brief (Thai brief → Thai prompt). ` +
-          `Output ONLY the prompt text - no preamble, no quotes, no markdown.`);
+          `Output STRICT JSON only (no markdown fences):\n` +
+          `{"prompt":"core mission & identity, second person, 3-6 sentences",` +
+          `"expertise":"bullet-ish lines: concrete skills, tools, domains they own",` +
+          `"personality":"tone of voice, character quirks, how they talk",` +
+          `"language":"primary reply language, e.g. ไทย / English / ตามผู้ใช้",` +
+          `"rules":"3-6 imperative work rules (do/don't), one per line"}\n` +
+          `Every field must genuinely reflect the brief. Match the brief's ` +
+          `language (Thai brief → Thai fields).`);
+        let out = { prompt: draft };
+        const m = draft.match(/\{[\s\S]*\}/);
+        if (m) try { out = JSON.parse(m[0]); } catch {}
         res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify({ prompt: draft }));
+        res.end(JSON.stringify(out));
       } catch (e) {
         res.writeHead(500);
         res.end(String(e.message));

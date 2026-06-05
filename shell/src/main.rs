@@ -48,7 +48,32 @@ enum UserEvent {
     HideOverlay,
     MiniToggle,
     FeedToggle,
+    Mic,
     WorldReady,
+}
+
+/// Pop Windows Voice Typing (Win+H) over the focused input — built-in,
+/// offline-capable, speaks Thai. The honest mic on this stack: WebView2
+/// has no Web Speech backend and we have no STT API keys.
+fn send_win_h() {
+    use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
+        SendInput, INPUT, INPUT_KEYBOARD, KEYBD_EVENT_FLAGS, KEYEVENTF_KEYUP, VK_LWIN,
+    };
+    unsafe {
+        let mut inputs: [INPUT; 4] = std::mem::zeroed();
+        let keys: [(u16, KEYBD_EVENT_FLAGS); 4] = [
+            (VK_LWIN, 0),
+            (0x48, 0),               // 'H'
+            (0x48, KEYEVENTF_KEYUP),
+            (VK_LWIN, KEYEVENTF_KEYUP),
+        ];
+        for (i, (vk, flags)) in keys.iter().enumerate() {
+            inputs[i].r#type = INPUT_KEYBOARD;
+            inputs[i].Anonymous.ki.wVk = *vk;
+            inputs[i].Anonymous.ki.dwFlags = *flags;
+        }
+        SendInput(4, inputs.as_ptr(), std::mem::size_of::<INPUT>() as i32);
+    }
 }
 
 const SPLASH_SIZE: f64 = 210.0;
@@ -443,6 +468,7 @@ fn main() {
                 "drag-overlay" => p_overlay.send_event(UserEvent::DragOverlay),
                 "hide" => p_overlay.send_event(UserEvent::HideOverlay),
                 "mini" => p_overlay.send_event(UserEvent::MiniToggle),
+                "mic" => p_overlay.send_event(UserEvent::Mic),
                 _ => Ok(()),
             };
         })
@@ -621,6 +647,10 @@ fn main() {
                 }
                 UserEvent::DragOrb => { let _ = orb.drag_window(); }
                 UserEvent::DragOverlay => { let _ = overlay.drag_window(); }
+                UserEvent::Mic => {
+                    overlay.set_focus();  // voice typing lands in the focused box
+                    send_win_h();
+                }
             },
             _ => {}
         }

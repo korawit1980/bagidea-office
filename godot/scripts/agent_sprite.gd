@@ -327,18 +327,20 @@ func _process(delta: float) -> void:
 			_trail_t = 0.15
 			_drop_afterimage()
 
-	# Continuous tailing: ALWAYS keep up with the followed node — walking
-	# whenever they walk, settling at a polite shoulder distance.
+	# Continuous tailing: keep up with the followed node — walking whenever
+	# they walk. Steering only operates at CLOSE range (same room, line of
+	# sight assumed); when the target gets far, the manager's tail loop
+	# re-routes along the A* graph so nobody cuts through walls.
 	if follow_node != null:
 		if not is_instance_valid(follow_node):
 			follow_node = null
 		else:
 			var tgt: Vector3 = follow_node.position + _follow_offset
 			var dist := position.distance_to(tgt)
-			if dist > 0.22:
+			if dist > 3.4:
+				_walking = false  # too far for steering — wait for a graph path
+			elif dist > 0.22:
 				var sp := WALK_SPEED * (4.0 if is_ghost else 1.0)
-				if dist > 3.0:
-					sp *= 1.7  # jog to catch up
 				position = position.move_toward(tgt, sp * delta)
 				_walking = true
 			elif _walking:

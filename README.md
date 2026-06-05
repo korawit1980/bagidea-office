@@ -59,6 +59,10 @@ Not a dashboard. Not a chat window. A **world** that renders the true state of y
 - **CEO chain of command**: ordering the CEO summons the Director — he walks over, takes the order, replies with a plan, and dispatches work to teammates via `DELEGATE:` lines (each spawns a real session, with the hand-over walk acted out). Delegation is a **round trip**: every delegate's result is reported back to the Director, who can answer questions / follow up with more `DELEGATE:` lines (bounded depth, serialized turns), and finally walks the CEO-readable summary over to the boss (`ceo.report`)
 - **Agent discussions**: pick 2–4 agents and a topic — they hold a real meeting, round-robin turns over a shared transcript, minutes on the in-world whiteboard
 - **Self-splitting sub-agents**: every session is told it may end a reply with `SUB: <job>` lines (2–4) when the request parallelizes — the daemon strips the protocol, spawns parallel clone sessions with the parent's persona + tools, records each in a labeled 👻 session, and resumes the parent for a final synthesis once all ghosts report back (a stuck ghost is reaped after 6 min, so synthesis always happens)
+- **Standing work orders**: `POST /jobs` — run now, at a datetime (optionally daily), or every N minutes; per-agent queue + a global concurrency cap keep the machine comfortable; each job keeps its own resumable thread
+- **Shared note board**: notes live in the UI *and* in `workspace/notes.md` — agents read it and append bullets themselves (file-watched both ways)
+- **Calendar with a personal touch**: appointments remind you via the Director — he physically walks over and tells you (`reminder` event), N minutes ahead
+- **Director heartbeat**: every 15/30/60 minutes (configurable) he reviews the calendar, standing jobs and the note board — and pings you ONLY when something deserves it ("OK" stays silent)
 - **Claude Code hooks integration**: any Claude Code session in this project reports its tool calls — your real work animates the Director automatically
 - **Permission broker**: dangerous tools from adapter sessions are held until you approve
 
@@ -290,7 +294,11 @@ node daemon\send.js agent.offline rin
 | `GET /sessions?agent=` · `GET /sessions/log?agent=&key=` · `POST /sessions/delete` | threads |
 | `GET /registry` · `POST /registry/agent` · `POST /registry/agent/delete` | staff CRUD |
 | `POST /registry/role` · `/registry/skill` · `/registry/mcp` · `/registry/autoskills` | libraries |
-| `POST /assist/prompt` `{name, role, brief}` | ✨ prompt copilot |
+| `POST /assist/prompt` `{name, role, brief}` | ✨ persona copilot (fills every field) |
+| `GET/POST /jobs` · `POST /jobs/update` | standing work orders (now / at / every) |
+| `GET/POST /notes` | shared note board (mirrors `workspace/notes.md`) |
+| `GET/POST /calendar` | appointments + Director reminders |
+| `POST /registry/heartbeat` `{min}` · `/registry/sound` | Director heartbeat · sound toggle |
 | `POST /discuss` `{agents[], topic, rounds}` | agent-to-agent meeting |
 | `POST /ui/daylight` `{hour: 17.5 \| "auto"}` | atmosphere override |
 | `POST /event` | push any OEP event (custom integrations) |

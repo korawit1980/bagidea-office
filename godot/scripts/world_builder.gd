@@ -12,9 +12,10 @@ const GRASS_SHADER := preload("res://shaders/grass_blade.gdshader")
 
 const WP := {
 	"exec_c": Vector3(-6, 0.86, -6),
-	"ceo_desk": Vector3(-6, 0.86, -7.3),
-	"pace_a": Vector3(-7.2, 0.86, -7.3),
-	"pace_b": Vector3(-4.8, 0.86, -7.3),
+	"ceo_desk": Vector3(-6, 0.86, -6.9),     # in FRONT of the console, not in it
+	"lead_desk": Vector3(-3.2, 0.86, -7.8),  # the Director's own workstation
+	"pace_a": Vector3(-7.2, 0.86, -7.0),
+	"pace_b": Vector3(-4.8, 0.86, -7.0),
 	"ops_c": Vector3(3, 0.86, -6.75),
 	"ap1": Vector3(2.4, 0.86, -8.85),
 	"ap2": Vector3(6.55, 0.86, -8.85),
@@ -72,6 +73,7 @@ const WP := {
 
 const EDGES := [
 	["exec_c", "door_el"], ["exec_c", "door_eo"], ["exec_c", "ceo_desk"],
+	["exec_c", "lead_desk"], ["ceo_desk", "lead_desk"],
 	["ceo_desk", "pace_a"], ["ceo_desk", "pace_b"],
 	["ops_c", "door_ol"], ["ops_c", "door_oc"], ["ops_c", "door_eo"],
 	["ops_c", "ap1"], ["ap1", "desk1"], ["ops_c", "ap2"], ["ap2", "desk2"],
@@ -1132,9 +1134,17 @@ func _build_geometry() -> void:
 
 	# ---- Executive Office
 	if kit:
-		_kit("Command_Console", Vector3(-6, 0, -8.4), 0.0, 0.5)   # the command station
+		_kit("Command_Console", Vector3(-6, 0, -8.4), 0.0, 0.5)   # the CEO's command station
 		_kit("Orrery", Vector3(-8.6, 0, -4.2), 0.0, 0.35)
 		_kit("Large_Monitor_Blue", Vector3(-8.06, 0, -9.55), 0.0, 0.5)
+		# The Director's own lead workstation, east side of the executive floor.
+		_box(Vector3(-3.2, 0.62, -8.75), Vector3(1.5, 0.08, 0.75),
+			_mat(Color(0.16, 0.19, 0.27), 0.45))
+		_box(Vector3(-3.8, 0.3, -8.75), Vector3(0.12, 0.6, 0.6), _mat(Color(0.1, 0.12, 0.18)))
+		_box(Vector3(-2.6, 0.3, -8.75), Vector3(0.12, 0.6, 0.6), _mat(Color(0.1, 0.12, 0.18)))
+		_kit("Large_Monitor_Blue", Vector3(-3.2, 0.66, -8.85), 180.0, 0.3)
+		_kit("Chair_1", Vector3(-3.2, 0, -7.85), 180.0, 0.6)
+		_kit("Plant_1", Vector3(-2.25, 0, -9.3), 40.0, 1.4)
 	else:
 		_box(Vector3(-6, 0.42, -8.3), Vector3(2.6, 0.84, 1.1), dark_wood)
 		_box(Vector3(-6, 0.88, -8.3), Vector3(2.9, 0.08, 1.3), wood)
@@ -1304,6 +1314,13 @@ func _build_geometry() -> void:
 	add_child(ball)
 	ball.position = Vector3(-1.8, 0.2, 10.4)
 	_build_tv_glow()
+	# The lawn dog (Pet Dogs Pack) — lives outside, keeps the office tidy.
+	var dog_script := load("res://scripts/pack_dog_sprite.gd")
+	if dog_script.has_assets():
+		var lawn_dog := Sprite3D.new()
+		lawn_dog.set_script(dog_script)
+		add_child(lawn_dog)
+		lawn_dog.position = Vector3(2.0, 0.05, 16.5)
 	_omni(Vector3(-3.5, 2.6, 9.5), Color(1.0, 0.85, 0.6), 2.4, 9.0)
 	_omni(Vector3(-7.8, 1.9, 11.9), Color(0.6, 1.0, 0.7), 1.2, 4.0)           # garden glow
 

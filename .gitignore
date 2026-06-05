@@ -13,6 +13,9 @@ daemon/registry.json
 daemon/sessions.json
 daemon/map_bg.png
 daemon/mcp_*.json
+daemon/jobs.json
+daemon/notes.json
+daemon/calendar.json
 
 # Adapter session workspace (keep only the permission-hook config)
 workspace/*
@@ -36,3 +39,4 @@ godot/assets/env/
 _shots/
 shots/
 godot/assets/pixelfx/
+godot/assets/sounds/

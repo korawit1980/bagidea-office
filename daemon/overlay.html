@@ -226,6 +226,24 @@
   #activity .act b { color: #cfe3ff; font-weight: 600; }
   #activity .act .t { color: rgba(160,170,190,0.55); font-size: 10px; margin-right: 5px; }
 
+  /* ---- 🏢 org chart ------------------------------------------------------ */
+  .orgrow { display: flex; justify-content: center; gap: 14px; flex-wrap: wrap; }
+  .orgline { width: 2px; height: 16px; margin: 2px auto;
+    background: linear-gradient(rgba(94,200,255,0.7), rgba(94,200,255,0.2)); }
+  .orgseat {
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px;
+    background: rgba(255,255,255,0.04); cursor: pointer; min-width: 86px;
+    transition: transform 0.15s ease, border-color 0.15s;
+    animation: popIn 0.3s ease both;
+  }
+  .orgseat:hover { transform: translateY(-3px); border-color: var(--accent); }
+  .orgseat .face { border-radius: 8px; background: #1c2740; }
+  .orgseat b { font-size: 11.5px; color: #dbe7ff; }
+  .orgseat span { font-size: 9.5px; color: var(--dim); }
+  .orgrow:first-child .orgseat { border-color: rgba(255,200,90,0.55);
+    background: rgba(255,180,60,0.07); }
+
   /* ---- 📡 feed mode: a pure overlay — no chrome, no buttons, no input ---- */
   #feed, #feedHead { display: none; }
   body.feedmode main, body.feedmode footer, body.feedmode #rail,
@@ -426,7 +444,7 @@
     .seat .face { width: 30px; height: 30px; }
     header { padding: 6px 10px; font-size: 11px; }
     header .sub { display: none; }
-    #discussBtn, #mapBtn, #dayBtn, #setBtn { display: none; }
+    #discussBtn, #mapBtn, #dayBtn, #setBtn, #opsBtn { display: none; }
     #miniBtn { margin-left: auto; }
     #threadBar { display: none; }
     #log { padding: 10px; }
@@ -438,7 +456,8 @@
   <img src="/brand/logo_ico_cute.png" width="20" height="20" draggable="false" style="flex:none">
   <span class="logo">BAGIDEA</span> OFFICE
   <span id="conn"></span>
-  <button id="discussBtn" title="Let agents discuss together" style="margin-left:auto">🗣</button>
+  <button id="opsBtn" title="Office Ops — งาน / ปฏิทิน / โน้ต / ผังองค์กร" style="margin-left:auto">🗂</button>
+  <button id="discussBtn" title="Let agents discuss together" style="margin-left:6px">🗣</button>
   <button id="mapBtn" title="Top-down office map" style="margin-left:6px">🗺</button>
   <button id="dayBtn" title="World atmosphere" style="margin-left:6px">🌗</button>
   <button id="setBtn" title="Office settings — agents, roles" style="margin-left:6px">⚙</button>
@@ -481,6 +500,7 @@
 <div id="threadBar">🧵 thread: <b id="threadName">ล่าสุด (ต่อเนื่องอัตโนมัติ)</b></div>
 <footer>
   <input id="inp" placeholder="Message Main… (Enter to send)" autofocus>
+  <button class="send" id="micBtn" title="พูดแทนพิมพ์ — Windows Voice Typing (Win+H)">🎤</button>
   <button class="send" id="sessBtn" title="Chat sessions (threads)">🧵</button>
   <button class="send" id="send">➤</button>
 </footer>
@@ -505,7 +525,7 @@
   const NPCS = [1, 2, 3, 4, 5, 6, 9, 10, 11, 12];
   // Live registry from the daemon (roster.sync) — identity source of truth.
   let ROSTER = {}, REGROLES = [], REGSKILLS = {}, REGTOOLS = [], AUTOSKILLS = true;
-  let BUILTIN_DESC = {}, REGMCP = {}, SOUND = true;
+  let BUILTIN_DESC = {}, REGMCP = {}, SOUND = true, HEARTBEAT = 0;
   function npcOf(id) {
     if (ROSTER[id] && ROSTER[id].avatar) return ROSTER[id].avatar;
     if (id === "main") return 7;
@@ -694,10 +714,31 @@
   // Native context menu has no business in our chrome.
   document.addEventListener("contextmenu", (e) => e.preventDefault());
 
-  // ---- UI sounds: a tiny WebAudio synth, obeying the world SOUND toggle --
+  // ---- UI sounds: real pack WAVs when present, tiny synth fallback -------
+  const SFX_FILES = {
+    click: "Interface 1-1.wav",
+    send: "Whoosh 1-1.wav",
+    msg: "Interface 3-3.wav",
+    alert: "Sci-Fi Interface 8-1.wav",
+  };
+  const _sfxCache = {};
+  let _sfxMissing = false;
   let _actx = null;
   function uiSnd(kind) {
     if (!SOUND) return;
+    const f = SFX_FILES[kind];
+    if (f && !_sfxMissing) {
+      try {
+        const a = _sfxCache[kind] ? _sfxCache[kind].cloneNode() : new Audio("/sfx/" + encodeURIComponent(f));
+        _sfxCache[kind] = _sfxCache[kind] || a;
+        a.volume = 0.3;
+        a.play().then(() => {}).catch(() => { _sfxMissing = true; uiSndSynth(kind); });
+        return;
+      } catch { _sfxMissing = true; }
+    }
+    uiSndSynth(kind);
+  }
+  function uiSndSynth(kind) {
     try {
       _actx = _actx || new (window.AudioContext || window.webkitAudioContext)();
       const t0 = _actx.currentTime;
@@ -721,6 +762,20 @@
     if (e.target.closest("button, .opt, .seat, .arow, .tab, .winbtn, .switch, #sideTab, .mapicon, .av"))
       uiSnd("click");
   }, true);
+
+  // ---- 🎤 voice typing: any mic button pops Win+H into its input ---------
+  // (Windows' built-in dictation — offline-capable, speaks Thai. WebView2
+  // has no Web Speech backend, so this is the honest path.)
+  function wireMic(btn, input) {
+    if (!btn) return;
+    btn.addEventListener("mousedown", (e) => e.preventDefault());  // keep focus flow
+    btn.onclick = () => {
+      if (input) input.focus();
+      if (shellPost) shellPost("mic");
+      else addChip("🎤 ใช้ได้เฉพาะในแอป BagIdea Office (กด Win+H แทนได้)");
+    };
+  }
+  wireMic(document.getElementById("micBtn"), document.getElementById("inp"));
 
   // ---- 📡 feed mode (streamer overlay) ------------------------------------
   const feedEl = document.getElementById("feed");
@@ -860,6 +915,13 @@
     if (tab === "agents") {
       bodyHtml = `<div class="switch ${SOUND ? "on" : ""}" id="sndSw">
           <div class="knob"><\/div> 🔊 Sound effects — เสียงประกอบในโลก office</div>
+        <div class="field" style="margin-top:8px"><label>💓 DIRECTOR HEARTBEAT — รอบตรวจภาพรวม/ตารางงาน (แจ้งเฉพาะที่ควรรู้)</label>
+          <select id="hbSel">
+            <option value="0">ปิด</option>
+            <option value="15">ทุก 15 นาที</option>
+            <option value="30">ทุก 30 นาที</option>
+            <option value="60">ทุก 1 ชั่วโมง</option>
+          </select></div>
         <div id="alist"></div><button class="bigbtn" id="newAgent">＋ Hire a new agent</button>`;
     } else if (tab === "skills") {
       bodyHtml = `<div class="switch ${AUTOSKILLS ? "on" : ""}" id="autoSw">
@@ -914,6 +976,12 @@
         SOUND = !SOUND;
         await api("/registry/sound", { enabled: SOUND });
         e.currentTarget.classList.toggle("on", SOUND);
+      };
+      const hbSel = modalCard.querySelector("#hbSel");
+      hbSel.value = String(HEARTBEAT);
+      hbSel.onchange = async () => {
+        HEARTBEAT = Number(hbSel.value);
+        await api("/registry/heartbeat", { min: HEARTBEAT });
       };
     } else if (tab === "skills") {
       modalCard.querySelector("#autoSw").onclick = async (e) => {
@@ -1072,15 +1140,28 @@
       ["gold", "👑 gold", "#ffd24d"]];
     const auraField = `<div class="field"><label>✨ AURA — วงแสงเวทย์ใต้เท้า (ของตกแต่ง)</label>
       <div class="checks" id="eAura"></div></div>`;
+    const px = a.persona || {};
     const aiFields = `
        <div class="field"><label>JOB TITLE</label><select id="eRole"></select></div>
-       <div class="field"><label>✨ PROMPT COPILOT — บอกสั้นๆ ว่าอยากได้ agent แบบไหน</label>
+       <div class="field"><label>🏢 ระดับในองค์กร</label><select id="eTier">
+         <option value="2">หัวหน้าทีม (Lead)</option>
+         <option value="3">ทีมงาน (Staff)</option>
+       </select></div>
+       <div class="field"><label>✨ PERSONA COPILOT — บอกสั้นๆ ว่าอยากได้ agent แบบไหน (เติมให้ทุกช่อง)</label>
          <div class="assistrow">
-           <input id="eBrief" placeholder='เช่น "นักออกแบบ UI เน้น minimal" แล้วกด ✨'>
+           <input id="eBrief" placeholder='เช่น "นักออกแบบ UI เน้น minimal พูดติดตลก" แล้วกด ✨'>
            <button class="sparkle" id="eAssist">✨ Draft</button>
          </div></div>
-       <div class="field"><label>SYSTEM PROMPT (หน้าที่ / นิสัย / มาตรฐานงาน — แก้ได้อิสระ)</label>
+       <div class="field"><label>SYSTEM PROMPT — ตัวตนและภารกิจหลัก</label>
          <textarea id="ePrompt"></textarea></div>
+       <div class="field"><label>🛠 ความเชี่ยวชาญ / ขอบเขตงาน</label>
+         <textarea id="eExpertise" style="min-height:54px" placeholder="เช่น ออกแบบ UI/UX, Figma, design system, สี-ฟอนต์-spacing"></textarea></div>
+       <div class="field"><label>🎭 บุคลิก / น้ำเสียง</label>
+         <textarea id="ePersonality" style="min-height:54px" placeholder="เช่น เป็นกันเอง ขี้เล่นนิดๆ ตอบกระชับ ใช้อีโมจิบ้าง"></textarea></div>
+       <div class="field"><label>🗣 ภาษาหลักที่ใช้ตอบ</label>
+         <input id="eLanguage" maxlength="80" placeholder='เช่น "ไทย" / "English" / "ตามภาษาของผู้ใช้"'></div>
+       <div class="field"><label>📏 กฎการทำงาน (do / don't — บรรทัดละข้อ)</label>
+         <textarea id="eRules" style="min-height:54px" placeholder="เช่น ตรวจข้อมูลจากแหล่งจริงก่อนตอบเสมอ&#10;ห้ามเดาตัวเลข"></textarea></div>
        <div class="field"><label>🎯 SKILLS</label><div class="checks" id="eSkills"></div></div>
        <div class="field"><label>🔧 TOOLS (ว่าง = ชุดอ่านอย่างเดียว Read/Glob/Grep)</label><div class="checks" id="eTools"></div></div>`;
     modalCard.innerHTML = hdr(isUser ? "👑 YOUR AVATAR" : (id ? "✏ EDIT AGENT" : "＋ HIRE AGENT")) +
@@ -1166,7 +1247,12 @@
         roleSel.appendChild(o);
       }
       roleSel.value = a.role;
+      modalCard.querySelector("#eTier").value = String(a.tier || (id === "main" ? 2 : 3));
       modalCard.querySelector("#ePrompt").value = a.prompt || "";
+      modalCard.querySelector("#eExpertise").value = px.expertise || "";
+      modalCard.querySelector("#ePersonality").value = px.personality || "";
+      modalCard.querySelector("#eLanguage").value = px.language || "";
+      modalCard.querySelector("#eRules").value = px.rules || "";
       modalCard.querySelector("#eAssist").onclick = async (e) => {
         const btn = e.target;
         btn.disabled = true; btn.textContent = "⏳ thinking…";
@@ -1176,7 +1262,12 @@
             role: roleSel.value,
             brief: modalCard.querySelector("#eBrief").value,
           });
+          // The copilot fills EVERY persona field it designed.
           if (r.prompt) modalCard.querySelector("#ePrompt").value = r.prompt;
+          if (r.expertise) modalCard.querySelector("#eExpertise").value = r.expertise;
+          if (r.personality) modalCard.querySelector("#ePersonality").value = r.personality;
+          if (r.language) modalCard.querySelector("#eLanguage").value = r.language;
+          if (r.rules) modalCard.querySelector("#eRules").value = r.rules;
         } finally { btn.disabled = false; btn.textContent = "✨ Draft"; }
       };
     }
@@ -1189,6 +1280,13 @@
         ? { id, name, avatar, aura: myAura }  // the CEO row keeps no AI fields
         : { id, name, role: roleSel.value, avatar, aura: myAura,
             prompt: modalCard.querySelector("#ePrompt").value,
+            tier: Number(modalCard.querySelector("#eTier").value) || 3,
+            persona: {
+              expertise: modalCard.querySelector("#eExpertise").value,
+              personality: modalCard.querySelector("#ePersonality").value,
+              language: modalCard.querySelector("#eLanguage").value,
+              rules: modalCard.querySelector("#eRules").value,
+            },
             skills: [...mySkills], tools: [...myTools] };
       const r = await api("/registry/agent", payload);
       closeModal();
@@ -1229,6 +1327,209 @@
     f.style.backgroundPosition = `${-14 * k}px ${-14 * k}px`;
     modalCard.querySelector("#cardEdit").onclick = () => ROSTER[id] ? openEditor(id) : null;
     modalCard.querySelector("#cardChat").onclick = () => { closeModal(); setTarget(id); };
+  }
+
+  // ---- 🗂 Office Ops: jobs / calendar / notes / org chart -------------------
+  document.getElementById("opsBtn").onclick = () => openOps("jobs");
+  async function openOps(tab) {
+    modal.classList.add("open");
+    const T = (t, label) => `<div class="tab ${tab === t ? "on" : ""}" data-t="${t}">${label}</div>`;
+    const tabs = `<div class="tabs">${T("jobs", "📋 TASKS")}${T("cal", "📅 CALENDAR")}${T("notes", "📝 NOTES")}${T("org", "🏢 ORG")}</div>`;
+    let body = "";
+    if (tab === "jobs") {
+      body = `<div id="jlist"></div>
+        <div class="field" style="margin-top:10px"><label>＋ สั่งงานใหม่</label>
+          <select id="jAgent"></select>
+          <div class="assistrow" style="margin-top:6px">
+            <textarea id="jPrompt" style="min-height:54px;flex:1" placeholder="สั่งงานที่นี่… เช่น สรุปข่าว AI เช้านี้ให้หน่อย"></textarea>
+            <button class="send" id="jMic" title="พูดแทนพิมพ์">🎤</button>
+          </div>
+          <div class="checks" id="jMode" style="margin-top:6px">
+            <div class="chk on" data-m="now">⚡ ทำทันที</div>
+            <div class="chk" data-m="at">🕐 ตามเวลา</div>
+            <div class="chk" data-m="every">🔁 ทุกๆ N นาที</div>
+          </div>
+          <div id="jWhen" style="margin-top:6px"></div>
+          <button class="bigbtn" id="jAdd" style="margin-top:8px">📋 สั่งงาน</button>
+        </div>`;
+    } else if (tab === "cal") {
+      body = `<div id="clist"></div>
+        <div class="field" style="margin-top:10px"><label>＋ เพิ่มนัดหมาย</label>
+          <input id="cTitle" placeholder="เช่น ประชุมทีม / ไปหาหมอ" maxlength="120">
+          <div class="assistrow" style="margin-top:6px">
+            <input id="cAt" type="datetime-local" style="flex:1">
+            <select id="cRemind" style="width:130px">
+              <option value="5">เตือนก่อน 5 นาที</option>
+              <option value="10" selected>เตือนก่อน 10 นาที</option>
+              <option value="30">เตือนก่อน 30 นาที</option>
+              <option value="60">เตือนก่อน 1 ชม.</option>
+            </select>
+          </div>
+          <button class="bigbtn" id="cAdd" style="margin-top:8px">📅 บันทึกนัด</button>
+        </div>
+        <div style="font-size:10.5px;color:var(--dim);margin-top:8px">
+          🔔 Director จะเดินมาเตือนคุณก่อนถึงเวลา ตามที่ตั้งไว้</div>`;
+    } else if (tab === "notes") {
+      body = `<div id="nlist"></div>
+        <div class="assistrow" style="margin-top:10px">
+          <input id="nText" placeholder="จดโน้ต… (agents อ่าน/เขียนผ่าน notes.md ได้ด้วย)" maxlength="500">
+          <button class="send" id="nMic" title="พูดแทนพิมพ์">🎤</button>
+          <button class="primary" id="nAdd">📝</button>
+        </div>`;
+    } else {
+      body = `<div id="orgBox"></div>
+        <div style="font-size:10.5px;color:var(--dim);margin-top:8px">
+          ระดับองค์กรแก้ได้ในหน้าแก้ไข agent (🏢 ระดับในองค์กร)</div>`;
+    }
+    modalCard.innerHTML = hdr("🗂 OFFICE OPS") + tabs + body;
+    modalCard.querySelectorAll(".tab").forEach((t) => (t.onclick = () => openOps(t.dataset.t)));
+
+    if (tab === "jobs") {
+      const sel = modalCard.querySelector("#jAgent");
+      for (const aid of Object.keys(ROSTER).filter((x) => x !== "ceo")) {
+        const o = document.createElement("option");
+        o.value = aid; o.textContent = `${nameOf(aid)} — ${roleOf(aid)}`;
+        sel.appendChild(o);
+      }
+      let mode = "now";
+      const when = modalCard.querySelector("#jWhen");
+      const renderWhen = () => {
+        when.innerHTML = mode === "at"
+          ? `<input id="jAt" type="datetime-local" style="width:100%">
+             <div class="chk" id="jDaily" style="margin-top:6px;display:inline-block">🔁 ทำซ้ำทุกวัน เวลานี้</div>`
+          : mode === "every"
+            ? `<input id="jEvery" type="number" min="5" value="30" style="width:110px"> นาที (ขั้นต่ำ 5)`
+            : `<span style="font-size:11px;color:var(--dim)">เริ่มทำทันทีที่กดสั่ง</span>`;
+        const dl = when.querySelector("#jDaily");
+        if (dl) dl.onclick = () => dl.classList.toggle("on");
+      };
+      renderWhen();
+      modalCard.querySelectorAll("#jMode .chk").forEach((c) => (c.onclick = () => {
+        mode = c.dataset.m;
+        modalCard.querySelectorAll("#jMode .chk").forEach((x) => x.classList.toggle("on", x === c));
+        renderWhen();
+      }));
+      wireMic(modalCard.querySelector("#jMic"), modalCard.querySelector("#jPrompt"));
+      modalCard.querySelector("#jAdd").onclick = async () => {
+        const prompt = modalCard.querySelector("#jPrompt").value.trim();
+        if (!prompt) return;
+        const p = { agent: sel.value, prompt, mode };
+        if (mode === "at") {
+          const v = when.querySelector("#jAt").value;
+          if (!v) return;
+          p.at = new Date(v).getTime();
+          if (when.querySelector("#jDaily").classList.contains("on")) {
+            p.daily = true;
+            p.time = v.slice(11, 16);
+          }
+        } else if (mode === "every") {
+          p.everyMin = Number(when.querySelector("#jEvery").value) || 30;
+        }
+        await api("/jobs", p);
+        openOps("jobs");
+      };
+      const r = await fetch("/jobs").then((x) => x.json()).catch(() => ({ jobs: [] }));
+      const box = modalCard.querySelector("#jlist");
+      const live = (r.jobs || []).filter((j) => !j.done);
+      box.innerHTML = live.length ? "" :
+        `<div style="font-size:11.5px;color:var(--dim)">ยังไม่มีงานที่สั่งค้างไว้</div>`;
+      for (const j of live.slice().reverse()) {
+        const row = document.createElement("div");
+        row.className = "arow";
+        const f = document.createElement("div");
+        f.className = "face"; face(f, j.agent, 30);
+        const desc = j.mode === "every" ? `🔁 ทุก ${j.everyMin} นาที`
+          : j.mode === "at" && j.daily ? `🔁 ทุกวัน ${j.time}`
+          : j.mode === "at" ? `🕐 ${new Date(j.at).toLocaleString()}`
+          : "⚡ ทันที";
+        row.appendChild(f);
+        row.insertAdjacentHTML("beforeend",
+          `<div class="meta"><b>${j.prompt.slice(0, 56).replace(/</g, "&lt;")}</b>
+             <span>${nameOf(j.agent)} · ${desc}${j.enabled === false ? " · ⏸ พัก" : ""}${j.lastRun ? " · ล่าสุด " + new Date(j.lastRun).toLocaleTimeString() : ""}</span></div>
+           <div class="winbtn" title="พัก/เล่น">${j.enabled === false ? "▶" : "⏸"}</div>
+           <div class="winbtn hide" title="ลบ">✕</div>`);
+        const btns = row.querySelectorAll(".winbtn");
+        btns[0].onclick = () => api("/jobs/update", { id: j.id, enabled: j.enabled === false }).then(() => openOps("jobs"));
+        btns[1].onclick = () => api("/jobs/update", { id: j.id, remove: true }).then(() => openOps("jobs"));
+        box.appendChild(row);
+      }
+    } else if (tab === "cal") {
+      modalCard.querySelector("#cAdd").onclick = async () => {
+        const title = modalCard.querySelector("#cTitle").value.trim();
+        const v = modalCard.querySelector("#cAt").value;
+        if (!title || !v) return;
+        await api("/calendar", { title, at: new Date(v).getTime(),
+          remindMin: Number(modalCard.querySelector("#cRemind").value) });
+        openOps("cal");
+      };
+      const r = await fetch("/calendar").then((x) => x.json()).catch(() => ({ cal: [] }));
+      const box = modalCard.querySelector("#clist");
+      const upcoming = (r.cal || []).sort((a, b) => a.at - b.at);
+      box.innerHTML = upcoming.length ? "" :
+        `<div style="font-size:11.5px;color:var(--dim)">ยังไม่มีนัดหมาย</div>`;
+      for (const c of upcoming) {
+        const past = c.at < Date.now();
+        const row = document.createElement("div");
+        row.className = "arow";
+        row.style.opacity = past ? "0.45" : "1";
+        row.innerHTML = `<div class="meta"><b>${past ? "✓ " : "📅 "}${c.title.replace(/</g, "&lt;")}</b>
+            <span>${new Date(c.at).toLocaleString()} · เตือนก่อน ${c.remindMin} นาที</span></div>
+          <div class="winbtn hide" title="ลบ">✕</div>`;
+        row.querySelector(".winbtn").onclick = () =>
+          api("/calendar", { remove: c.id }).then(() => openOps("cal"));
+        box.appendChild(row);
+      }
+    } else if (tab === "notes") {
+      wireMic(modalCard.querySelector("#nMic"), modalCard.querySelector("#nText"));
+      const add = async () => {
+        const t = modalCard.querySelector("#nText").value.trim();
+        if (!t) return;
+        await api("/notes", { text: t });
+        openOps("notes");
+      };
+      modalCard.querySelector("#nAdd").onclick = add;
+      modalCard.querySelector("#nText").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") add();
+      });
+      const r = await fetch("/notes").then((x) => x.json()).catch(() => ({ notes: [] }));
+      const box = modalCard.querySelector("#nlist");
+      box.innerHTML = (r.notes || []).length ? "" :
+        `<div style="font-size:11.5px;color:var(--dim)">กระดานยังว่าง — จดอะไรไว้ให้ทีมหรือให้ตัวเองก็ได้</div>`;
+      for (const n of (r.notes || []).slice().reverse()) {
+        const row = document.createElement("div");
+        row.className = "arow";
+        row.innerHTML = `<div class="meta"><b>${n.who === "you" ? "🧑‍💼" : "🤖"} ${String(n.text).replace(/</g, "&lt;")}</b>
+            <span>${new Date(n.ts).toLocaleString()}</span></div>
+          <div class="winbtn hide" title="ลบ">✕</div>`;
+        row.querySelector(".winbtn").onclick = () =>
+          api("/notes", { remove: n.id }).then(() => openOps("notes"));
+        box.appendChild(row);
+      }
+    } else {
+      // 🏢 the company, as a tree: CEO → Director → leads → staff.
+      const box = modalCard.querySelector("#orgBox");
+      const tierOf = (aid) => aid === "ceo" ? 0 : aid === "main" ? 1
+        : Number((ROSTER[aid] || {}).tier) === 2 ? 2 : 3;
+      const seatHtml = (aid, big) => {
+        const size = big ? 44 : 36;
+        return `<div class="orgseat" data-id="${aid}">
+          <div class="face px" style="width:${size}px;height:${size}px"></div>
+          <b>${nameOf(aid)}</b><span>${roleOf(aid)}</span></div>`;
+      };
+      const ids = Object.keys(ROSTER);
+      box.innerHTML =
+        `<div class="orgrow">${seatHtml("ceo", true)}</div><div class="orgline"></div>
+         <div class="orgrow">${ids.filter((x) => tierOf(x) === 1).map((x) => seatHtml(x, true)).join("")}</div>
+         ${ids.some((x) => tierOf(x) === 2) ? `<div class="orgline"></div>
+         <div class="orgrow">${ids.filter((x) => tierOf(x) === 2).map((x) => seatHtml(x)).join("")}</div>` : ""}
+         <div class="orgline"></div>
+         <div class="orgrow">${ids.filter((x) => tierOf(x) === 3).map((x) => seatHtml(x)).join("")}</div>`;
+      box.querySelectorAll(".orgseat").forEach((s) => {
+        const f = s.querySelector(".face");
+        face(f, s.dataset.id, parseInt(f.style.width) || 36);
+        s.onclick = () => openCard(s.dataset.id);
+      });
+    }
   }
 
   // ---- sessions (threads) ---------------------------------------------------
@@ -1564,6 +1865,7 @@
       REGMCP = ev.mcp || {};
       AUTOSKILLS = ev.autoSkills !== false;
       SOUND = ev.sound !== false;
+      HEARTBEAT = Number(ev.heartbeatMin || 0);
       for (const id of Object.keys(ROSTER)) ensureAgent(id);
       renderRail();
       setTarget(target);   // refresh name/role if the target was edited
@@ -1663,6 +1965,19 @@
         if (target === "ceo") addChip(`📨 <b>${nameOf("main")}</b> เดินมาส่งสรุปงานแล้ว ↑`);
       }
     }
+    else if (ev.type === "reminder") {
+      if (!ev.replay) {
+        addChip(`🔔 <b>เตือนนัด:</b> ${String(ev.text).replace(/</g, "&lt;")} (${new Date(ev.at).toLocaleTimeString()})`);
+        addLog(`🔔 เตือนนัด: <b>${String(ev.text).replace(/</g, "&lt;")}</b>`);
+        uiSnd("alert");
+      }
+    }
+    else if (ev.type === "job.started") {
+      if (!ev.replay) addLog(`📋 เริ่มงานที่สั่งไว้: <b>${String(ev.title || "").replace(/</g, "&lt;")}</b> — ${nameOf(ev.agent)}`);
+    }
+    else if (ev.type === "notes.changed") {
+      if (!ev.replay && ev.by === "agent") addLog(`📝 มี agent เขียนโน้ตบนกระดาน (${ev.count} ข้อ)`);
+    }
     else if (ev.type === "collab.started") {
       if (!ev.replay) addLog(`🤝 ประชุมเริ่ม — ${(ev.agents || []).map(nameOf).join(", ")}`);
     }
@@ -1714,7 +2029,7 @@
   document.getElementById("inp").addEventListener("keydown", (e) => { if (e.key === "Enter") send(); });
   // Top-bar popups (menus, modals, the map…) live where the sidebar slides
   // in — opening any of them tucks the panel away first.
-  for (const bid of ["discussBtn", "mapBtn", "dayBtn", "setBtn", "sessBtn"]) {
+  for (const bid of ["opsBtn", "discussBtn", "mapBtn", "dayBtn", "setBtn", "sessBtn"]) {
     const el = document.getElementById(bid);
     if (el) el.addEventListener("click", () => setSide(false), true);
   }
