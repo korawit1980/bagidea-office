@@ -118,6 +118,19 @@ var _aura_node: Node3D
 var aura := ""
 var is_ghost := false
 var _trail_t := 0.0
+## Live tailing: steer toward this node every frame (orders, supervision).
+var follow_node: Node3D = null
+var _follow_offset := Vector3(1.0, 0, 0.6)
+
+func follow(node: Node3D, offset := Vector3(1.0, 0, 0.6)) -> void:
+	follow_node = node
+	_follow_offset = offset
+	if _walk_tween:
+		_walk_tween.kill()  # manual steering takes over
+
+func unfollow() -> void:
+	follow_node = null
+	_walking = false
 
 ## Spectral mode for sub-agent clones: steadily translucent (see-through,
 ## no flicker), cool self-lit tint, rising soul-wisp particles and an
@@ -313,6 +326,24 @@ func _process(delta: float) -> void:
 		if _trail_t <= 0.0:
 			_trail_t = 0.15
 			_drop_afterimage()
+
+	# Continuous tailing: ALWAYS keep up with the followed node — walking
+	# whenever they walk, settling at a polite shoulder distance.
+	if follow_node != null:
+		if not is_instance_valid(follow_node):
+			follow_node = null
+		else:
+			var tgt: Vector3 = follow_node.position + _follow_offset
+			var dist := position.distance_to(tgt)
+			if dist > 0.22:
+				var sp := WALK_SPEED * (4.0 if is_ghost else 1.0)
+				if dist > 3.0:
+					sp *= 1.7  # jog to catch up
+				position = position.move_toward(tgt, sp * delta)
+				_walking = true
+			elif _walking:
+				_walking = false
+				_dir = DIR_DOWN
 	# Sheet art: feet sit 31 px below cell center; node stands at y 0.86
 	# (0.86 / 0.032 ≈ 27 px) → lift by 4 px so feet land exactly on the floor.
 	if _mode == "procedural":
@@ -362,6 +393,7 @@ func set_state(state: String) -> void:
 func walk_to(points: Array) -> float:
 	if points.is_empty():
 		return 0.0
+	follow_node = null  # an explicit walk always overrides tailing
 	if _walk_tween:
 		_walk_tween.kill()
 	_walk_tween = create_tween()

@@ -112,6 +112,7 @@ var beam_mats: Array[ShaderMaterial] = []
 var pet: Sprite3D        # the office cat (or fallback dog) — agents play with it
 var ball: CSGSphere3D    # the rec football
 var _tv_glow: Node3D     # screen glow + light, on while someone watches
+var _tv_dark: MeshInstance3D  # matte panel covering the screen when OFF
 var _lamp_lights: Array[OmniLight3D] = []      # garden lamps — night only
 var _lamp_heads: Array[StandardMaterial3D] = []
 
@@ -855,10 +856,14 @@ func path_between(from_pos: Vector3, to_pos: Vector3) -> Array:
 	out.append(to_pos)
 	return out
 
-## TV truth: the screen glows only while someone is actually watching.
+## TV truth: glowing picture while someone watches; a genuinely DARK matte
+## panel when off (the kit monitor's own screen material is baked emissive —
+## it must be physically covered to read as "off").
 func tv_set(on: bool) -> void:
 	if _tv_glow:
 		_tv_glow.visible = on
+	if _tv_dark:
+		_tv_dark.visible = not on
 
 func _build_tv_glow() -> void:
 	_tv_glow = Node3D.new()
@@ -879,6 +884,16 @@ func _build_tv_glow() -> void:
 	_tv_glow.add_child(l)
 	l.position = Vector3(-8.6, 1.2, 8.4)
 	_tv_glow.visible = false
+	# The OFF panel: near-black, barely reflective — clearly powered down.
+	_tv_dark = MeshInstance3D.new()
+	var dm := QuadMesh.new()
+	dm.size = Vector2(0.98, 0.62)
+	_tv_dark.mesh = dm
+	_tv_dark.material_override = _mat(Color(0.045, 0.05, 0.065), 0.25)
+	_tv_dark.rotation_degrees = Vector3(0, 90, 0)
+	add_child(_tv_dark)
+	_tv_dark.position = Vector3(-9.18, 1.06, 8.4)
+	_tv_dark.visible = true
 
 ## Classic black-patch football texture (equirect-wrapped on the CSG sphere).
 func _soccer_texture() -> ImageTexture:

@@ -343,8 +343,20 @@ func _build_theater_banner() -> void:
 	_theater_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_theater_banner)
 
+var _theater_tw: Tween
+
 func set_theater(on: bool) -> void:
 	_theater_banner.visible = on
+	if _theater_tw:
+		_theater_tw.kill()
+		_theater_tw = null
+	if on:
+		# Old projector flicker — the banner breathes while the reel runs.
+		_theater_tw = create_tween().set_loops()
+		_theater_tw.tween_property(_theater_banner, "modulate:a", 0.45, 0.7)
+		_theater_tw.tween_property(_theater_banner, "modulate:a", 1.0, 0.7)
+	else:
+		_theater_banner.modulate.a = 1.0
 
 # ---------------------------------------------------------------- tracking
 

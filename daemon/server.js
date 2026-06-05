@@ -210,12 +210,14 @@ function broadcast(evt, journal = true) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let replaying = false;
+let replayStop = false;
 
 // Re-enacts a journal slice: events re-broadcast time-compressed with a
 // `theater` flag. The world acts them out; the mission board stays real.
 async function runReplay(minutes = 10, speed = 8) {
   if (replaying) return false;
   replaying = true;
+  replayStop = false;
   const since = Date.now() - minutes * 60000;
   const slice = journalTail(4000)
     .map((l) => { try { return JSON.parse(l); } catch { return null; } })
@@ -226,12 +228,14 @@ async function runReplay(minutes = 10, speed = 8) {
   try {
     let prev = null;
     for (const e of slice) {
+      if (replayStop) break;  // the projector has a stop button now
       if (prev !== null) await sleep(Math.min((e.ts - prev) / speed, 2500));
       prev = e.ts;
+      if (replayStop) break;
       broadcast({ ...e, theater: true, src_ts: e.ts });
     }
   } finally {
-    broadcast({ type: "theater.ended" });
+    broadcast({ type: "theater.ended", stopped: replayStop });
     replaying = false;
   }
   return true;
@@ -421,21 +425,42 @@ function runClaude(agent, prompt, opts = {}) {
 // walks over, takes the order, replies with a plan, and may delegate via
 // `DELEGATE: <agent_id> :: <instruction>` lines — each spawns a real
 // session for that agent (plus a little walk in the world).
-function ceoFlow(prompt, session) {
-  broadcast({ type: "ceo.summon", agent: "main" });
-  const team = Object.entries(reg.agents)
+function teamList() {
+  return Object.entries(reg.agents)
     .filter(([id]) => id !== "ceo" && id !== "main")
     .map(([id, a]) => `- ${id}: ${a.name}, ${a.role}` +
       (a.prompt ? ` — ${a.prompt.replace(/\s+/g, " ").slice(0, 100)}` : ""))
     .join("\n") || "(no other staff yet)";
+}
+
+// The Director can delegate from ANY conversation — talking to him directly
+// in his own pane works exactly like an order through the CEO.
+function directorNote() {
+  return `
+
+<system-capability>
+You are the Director. Your team:
+${teamList()}
+To hand work to a member, include a line EXACTLY in this format:
+DELEGATE: <agent_id> :: <clear, self-contained instruction>
+(one line per assignment — dispatched automatically; their result is reported
+back to you when they finish, so you can answer questions or follow up).
+IMPORTANT: prose like "I'll assign this to X" does NOTHING — only the
+DELEGATE line dispatches work.
+</system-capability>`;
+}
+
+function ceoFlow(prompt, session) {
+  broadcast({ type: "ceo.summon", agent: "main" });
   const wrapped =
     `The owner (CEO) has called you over and given this order in person:\n` +
     `"""${prompt}"""\n\n` +
-    `Your team:\n${team}\n\n` +
+    `Your team:\n${teamList()}\n\n` +
     `Decide how to execute. For anything a team member should own, include a line:\n` +
     `DELEGATE: <agent_id> :: <clear instruction for them>\n` +
     `(exact format, one per assignment — these are dispatched automatically, and ` +
-    `each member's result will be REPORTED BACK to you when they finish). ` +
+    `each member's result will be REPORTED BACK to you when they finish. ` +
+    `Prose alone dispatches NOTHING — only DELEGATE lines do). ` +
     `Anything not delegated you handle yourself. Reply to the owner with a short ` +
     `plan in the language they used.`;
   return runClaude("main", wrapped, {
@@ -470,13 +495,22 @@ function makeDelegateFilter(depth, session, onHit) {
   return (text) => {
     const keep = [];
     for (const ln of String(text).split("\n")) {
-      const m = ln.match(/^\s*DELEGATE:\s*([\w฀-๿-]+)\s*::\s*(.+)$/);
-      if (m && reg.agents[m[1]] && m[1] !== "ceo" && m[1] !== "main") {
-        broadcast({ type: "task.delegated", agent: "main", target: m[1] });
+      const m = ln.match(/^\s*DELEGATE:\s*([^:]+?)\s*::\s*(.+)$/);
+      // Accept the agent id OR its display name (models love names).
+      let tgt = null;
+      if (m) {
+        const key = m[1].trim();
+        tgt = reg.agents[key] ? key
+          : Object.keys(reg.agents).find((id) =>
+              (reg.agents[id].name || "").toLowerCase() === key.toLowerCase());
+      }
+      if (tgt && tgt !== "ceo" && tgt !== "main") {
+        broadcast({ type: "task.delegated", agent: "main", target: tgt });
         if (onHit) onHit();
-        const tgt = m[1], inst = m[2];
-        setTimeout(() => runClaude(tgt, inst, {   // after the hand-over walk
-          onDone: (out, ok) => reportToMain(tgt, out, ok, depth, session),
+        const inst = m[2];
+        const t = tgt;
+        setTimeout(() => runClaude(t, inst, {   // after the hand-over walk
+          onDone: (out, ok) => reportToMain(t, out, ok, depth, session),
         }), 4500);
       } else keep.push(ln);
     }
@@ -752,7 +786,13 @@ const server = http.createServer((req, res) => {
         const { agent = "main", prompt, session } = JSON.parse(body);
         if (!prompt) throw new Error("no prompt");
         // Orders to the CEO route through the Director — chain of command.
-        const task = agent === "ceo" ? ceoFlow(prompt, session) : runClaude(agent, prompt, { session });
+        // CEO orders route through the Director; talking to the Director
+        // directly gives him the same dispatch power.
+        const task = agent === "ceo" ? ceoFlow(prompt, session)
+          : agent === "main"
+            ? runClaude("main", prompt + directorNote(),
+                { session, logPrompt: prompt, filterText: makeDelegateFilter(0, session) })
+            : runClaude(agent, prompt, { session });
         res.writeHead(200, { "content-type": "application/json" });
         res.end(JSON.stringify({ task }));
       } catch (e) {
@@ -809,6 +849,11 @@ const server = http.createServer((req, res) => {
         res.end(String(e.message));
       }
     });
+
+  } else if (req.method === "POST" && req.url === "/replay/stop") {
+    replayStop = true;
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ ok: true }));
 
   } else if (req.method === "POST" && req.url === "/replay") {
     readBody(req, (body) => {
