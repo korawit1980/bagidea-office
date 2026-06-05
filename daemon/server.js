@@ -274,10 +274,23 @@ fs.watchFile(NOTES_MD, { interval: 3000 }, () => {
 // launcher bakes into the process command line.
 
 const PROJECTS_FILE = path.join(__dirname, "projects.json");
-let projects = loadJson(PROJECTS_FILE, []);  // {id, name, dir, ts}
+let projects = loadJson(PROJECTS_FILE, []);  // {id, name, dir, ts, created}
+// Migration: entries from before the `created` flag all came from the
+// create flow (browse-registering didn't exist yet) — they're ours.
+let migrated = false;
+for (const p of projects) if (p.created === undefined) { p.created = true; migrated = true; }
 const saveProjects = () => fs.writeFileSync(PROJECTS_FILE, JSON.stringify(projects, null, 2));
-let projOpen = new Set();   // project ids with a live terminal window
+if (migrated) saveProjects();
+let projWin = {};           // project id -> visible (true) / hidden (false)
 const projRuns = {};        // project id -> active AI runs
+const WINPROJ = path.join(__dirname, "winproj.ps1");
+
+function winproj(action, id, cb) {
+  const { execFile } = require("child_process");
+  execFile("powershell", ["-NoProfile", "-ExecutionPolicy", "Bypass",
+    "-File", WINPROJ, action, String(id || "")],
+    { timeout: 20000, windowsHide: true }, (e, out) => cb && cb(e, out));
+}
 
 function projectDir(id) {
   const p = projects.find((x) => x.id === id);
@@ -294,24 +307,26 @@ function claudeSessionCount(dir) {
   } catch { return 0; }
 }
 
-// Terminal liveness: every spawned window carries BAGIDEA_PROJ_<id> in its
-// command line — one WMI sweep finds the survivors.
+// Terminal liveness + visibility: every project window carries a
+// BAGIDEA_PROJ_<id> marker; winproj.ps1 sweeps them (1 = visible window,
+// 0 = running hidden in the background).
 function sweepProjects() {
-  const { execFile } = require("child_process");
-  execFile("powershell", ["-NoProfile", "-Command",
-    "Get-CimInstance Win32_Process -Filter \"Name='cmd.exe'\" | Select-Object -ExpandProperty CommandLine"],
-    { timeout: 15000 }, (e, out) => {
-      const found = new Set();
-      for (const m of String(out || "").matchAll(/BAGIDEA_PROJ_([\w-]+)/g)) found.add(m[1]);
-      const changed = found.size !== projOpen.size || [...found].some((x) => !projOpen.has(x));
-      projOpen = found;
-      if (changed) broadcast({ type: "projects.changed" }, false);
-    });
+  winproj("sweep", "", (e, out) => {
+    const next = {};
+    for (const line of String(out || "").split("\n")) {
+      const m = line.trim().match(/^([\w-]+)\s+([01])$/);
+      if (m) next[m[1]] = m[2] === "1";
+    }
+    const changed = JSON.stringify(next) !== JSON.stringify(projWin);
+    projWin = next;
+    if (changed) broadcast({ type: "projects.changed" }, false);
+  });
 }
 
 function projectStatus() {
   return projects.map((p) => ({ ...p,
-    open: projOpen.has(p.id), ai: (projRuns[p.id] || 0) > 0 }));
+    open: p.id in projWin, visible: !!projWin[p.id],
+    ai: (projRuns[p.id] || 0) > 0 }));
 }
 
 // ---- job runner: per-agent queue + a global cap so the machine breathes.
@@ -1270,10 +1285,12 @@ const server = http.createServer((req, res) => {
           spawn("cmd.exe", [`/c start "${path.basename(dir)}" /D "${dir}" cmd /k`],
             { windowsVerbatimArguments: true, windowsHide: true, detached: true });
         } else {
+          // conhost = a real classic console window we can HIDE and SHOW —
+          // that's the tmux trick: hiding keeps claude running untouched.
           const n = claudeSessionCount(dir);
           const cmd = n === 0 ? "claude" : n === 1 ? "claude -c" : "claude -r";
           spawn("cmd.exe",
-            [`/c start "BAGIDEA_PROJ_${id}" /D "${dir}" cmd /k "title BAGIDEA_PROJ_${id} && ${cmd}"`],
+            [`/c start "BAGIDEA_PROJ_${id}" /D "${dir}" conhost.exe cmd /k "title BAGIDEA_PROJ_${id} && ${cmd}"`],
             { windowsVerbatimArguments: true, windowsHide: true, detached: true });
           setTimeout(sweepProjects, 2500);
         }
@@ -1281,17 +1298,16 @@ const server = http.createServer((req, res) => {
       } catch (e) { res.writeHead(400); res.end(String(e.message)); }
     });
 
-  } else if (req.method === "POST" && req.url === "/projects/stop") {
-    // ⏹ close the project's terminal window (and everything inside it).
+  } else if (req.method === "POST" && (req.url === "/projects/stop" ||
+      req.url === "/projects/hide" || req.url === "/projects/resume")) {
+    // ⏹ stop kills the window tree for real. 🫥 hide tucks the window away
+    // while claude keeps working; ▶ resume brings the same window back.
     readBody(req, (body) => {
       try {
         const { id } = JSON.parse(body);
-        const { execFile } = require("child_process");
-        execFile("powershell", ["-NoProfile", "-Command",
-          `Get-CimInstance Win32_Process -Filter "Name='cmd.exe'" | ` +
-          `Where-Object { $_.CommandLine -match 'BAGIDEA_PROJ_${String(id).replace(/[^\w-]/g, "")}' } | ` +
-          `ForEach-Object { taskkill /PID $_.ProcessId /T /F }`],
-          { timeout: 15000 }, () => sweepProjects());
+        const action = req.url.endsWith("stop") ? "stop"
+          : req.url.endsWith("hide") ? "hide" : "show";
+        winproj(action, String(id).replace(/[^\w-]/g, ""), () => sweepProjects());
         res.writeHead(200); res.end("ok");
       } catch (e) { res.writeHead(400); res.end(String(e.message)); }
     });
@@ -1305,7 +1321,12 @@ const server = http.createServer((req, res) => {
         "Add-Type -AssemblyName System.Windows.Forms; " +
         "$f = New-Object System.Windows.Forms.FolderBrowserDialog; " +
         "$f.Description = 'เลือกโฟลเดอร์'; $f.ShowNewFolderButton = $true; " +
-        "$null = $f.ShowDialog(); $f.SelectedPath"],
+        // A topmost invisible owner — the overlay is always-on-top and was
+        // burying the dialog behind itself.
+        "$o = New-Object System.Windows.Forms.Form; $o.TopMost = $true; " +
+        "$o.ShowInTaskbar = $false; $o.Opacity = 0; $o.Width = 1; $o.Height = 1; " +
+        "$o.Show(); $o.Activate(); " +
+        "$null = $f.ShowDialog($o); $o.Close(); $f.SelectedPath"],
         { timeout: 120000, windowsHide: true }, (e, out) => {
           res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
           res.end(JSON.stringify({ path: String(out || "").trim() }));
