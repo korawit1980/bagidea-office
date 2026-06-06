@@ -333,15 +333,41 @@ function projectByName(name) {
   return p ? p.id : null;
 }
 
-// How many claude sessions already live in this directory? (claude keeps
-// them under ~/.claude/projects/<path-with-specials-as-dashes>/*.jsonl)
+// claude keeps sessions under ~/.claude/projects/<path-as-dashes>/*.jsonl.
+function claudeSessionDir(dir) {
+  return path.join(require("os").homedir(), ".claude", "projects",
+    String(dir).replace(/[^a-zA-Z0-9]/g, "-"));
+}
 function claudeSessionCount(dir) {
   try {
-    const enc = String(dir).replace(/[^a-zA-Z0-9]/g, "-");
-    const p = path.join(require("os").homedir(), ".claude", "projects", enc);
-    return fs.readdirSync(p).filter((f) => f.endsWith(".jsonl")).length;
+    return fs.readdirSync(claudeSessionDir(dir))
+      .filter((f) => f.endsWith(".jsonl")).length;
   } catch { return 0; }
 }
+// Newest session id — `claude -c` ignores headless-born sessions, so the
+// open button resumes the latest sid EXPLICITLY (proven to work).
+function newestSid(dir) {
+  try {
+    const p = claudeSessionDir(dir);
+    const files = fs.readdirSync(p).filter((f) => f.endsWith(".jsonl"))
+      .map((f) => ({ f, t: fs.statSync(path.join(p, f)).mtimeMs }))
+      .sort((a, b) => b.t - a.t);
+    return files.length ? files[0].f.replace(/\.jsonl$/, "") : null;
+  } catch { return null; }
+}
+
+// Windows Terminal renders Thai beautifully — use it when available.
+// Invoke by ABSOLUTE path: a hidden-started daemon can lack LOCALAPPDATA
+// and even the WindowsApps PATH entry, which silently forced the conhost
+// fallback before.
+const WT_EXE = path.join(require("os").homedir(),
+  "AppData", "Local", "Microsoft", "WindowsApps", "wt.exe");
+// App-execution aliases stat() as EACCES (existsSync = false even though
+// the file is right there) — detect via the directory listing instead.
+const HAS_WT = (() => {
+  try { return fs.readdirSync(path.dirname(WT_EXE)).includes("wt.exe"); }
+  catch { return false; }
+})();
 
 // Terminal liveness + visibility: every project window carries a
 // BAGIDEA_PROJ_<id> marker; winproj.ps1 sweeps them (1 = visible window,
@@ -1401,24 +1427,31 @@ const server = http.createServer((req, res) => {
         const { id, mode = "play" } = JSON.parse(body);
         const dir = projectDir(id);
         if (!dir) { res.writeHead(404); return res.end("unknown project"); }
+        const launch = (psCmd, title) => {
+          // Windows Terminal when present (beautiful Thai fonts; a NEW
+          // window, default-profile fonts), classic conhost as fallback.
+          // --suppressApplicationTitle LOCKS the title: it's how hide/resume
+          // finds exactly OUR window — WT shares one process across every
+          // window, so titles are the only safe handle.
+          const line = HAS_WT
+            ? `/c start "" "${WT_EXE}" -w new new-tab --title "${title}" --suppressApplicationTitle -d "${dir}" powershell -NoLogo -NoExit ${psCmd}`
+            : `/c start "${title}" /D "${dir}" conhost.exe powershell -NoLogo -NoExit ${psCmd}`;
+          spawn("cmd.exe", [line],
+            { windowsVerbatimArguments: true, windowsHide: true, detached: true });
+        };
         if (mode === "folder") {
           spawn("explorer", [dir], { detached: true });
         } else if (mode === "shell") {
-          // Plain PowerShell, no marker — not counted as "project open".
-          spawn("cmd.exe",
-            [`/c start "${path.basename(dir)}" /D "${dir}" conhost.exe powershell -NoLogo -NoExit`],
-            { windowsVerbatimArguments: true, windowsHide: true, detached: true });
+          // Plain shell, no marker — not counted as "project open".
+          launch("", path.basename(dir));
         } else {
           ensureTrusted(dir);  // no trust dialog ambush in the new window
-          // conhost = a real classic console window we can HIDE and SHOW —
-          // that's the tmux trick: hiding keeps claude running untouched.
-          // PowerShell host; the marker rides as a harmless comment so the
-          // process command line stays identifiable.
+          // Smart entry: no sessions → fresh claude; one → resume IT by id
+          // (claude -c ignores headless-born sessions!); several → -r picker.
           const n = claudeSessionCount(dir);
-          const cmd = n === 0 ? "claude" : n === 1 ? "claude -c" : "claude -r";
-          spawn("cmd.exe",
-            [`/c start "BAGIDEA_PROJ_${id}" /D "${dir}" conhost.exe powershell -NoLogo -NoExit -Command "${cmd} #BAGIDEA_PROJ_${id}"`],
-            { windowsVerbatimArguments: true, windowsHide: true, detached: true });
+          const sid = newestSid(dir);
+          const cmd = !sid ? "claude" : n > 1 ? "claude -r" : `claude --resume ${sid}`;
+          launch(`-Command "${cmd} #BAGIDEA_PROJ_${id}"`, `BAGIDEA_PROJ_${id}`);
           setTimeout(sweepProjects, 2500);
         }
         res.writeHead(200); res.end("ok");
@@ -1745,7 +1778,8 @@ const server = http.createServer((req, res) => {
 
   } else if (req.url === "/health") {
     res.writeHead(200, { "content-type": "application/json" });
-    res.end(JSON.stringify({ clients: wsClients.size, pendingPerms: pendingPerms.size }));
+    res.end(JSON.stringify({ clients: wsClients.size, pendingPerms: pendingPerms.size,
+      wt: HAS_WT }));
 
   } else {
     res.writeHead(404);
