@@ -366,12 +366,6 @@ function claudeSessionDir(dir) {
   return path.join(require("os").homedir(), ".claude", "projects",
     String(dir).replace(/[^a-zA-Z0-9]/g, "-"));
 }
-function claudeSessionCount(dir) {
-  try {
-    return fs.readdirSync(claudeSessionDir(dir))
-      .filter((f) => f.endsWith(".jsonl")).length;
-  } catch { return 0; }
-}
 // Newest session id — `claude -c` ignores headless-born sessions, so the
 // open button resumes the latest sid EXPLICITLY (proven to work).
 function newestSid(dir) {
@@ -435,6 +429,8 @@ ${places}
 การทดสอบใดๆ (เช่น เว็บ) ให้ใช้วิธีเบื้องหลังก่อนเสมอ (curl / headless / สคริปต์)
 อย่าเปิดหน้าต่างรบกวนผู้ใช้; ถ้าจำเป็นต้องเปิดจริงๆ จนไม่มีทางอื่น ให้รันคำสั่งเปิดตรงๆ
 แล้วระบบ Security จะขอ allow จากผู้ใช้ให้เอง.
+กฎเหล็ก: server/process ทุกตัวที่คุณเปิดเพื่อทดสอบ (dev server, next start, ฯลฯ)
+ต้องปิดให้หมดก่อนจบงาน — ห้ามทิ้งโปรเซสค้างไว้ในเครื่องผู้ใช้เด็ดขาด.
 </office-projects>`;
 }
 
@@ -1439,11 +1435,29 @@ const server = http.createServer((req, res) => {
           const proj = projects.find((x) => x.id === p.removeDisk);
           if (!proj) { res.writeHead(404); return res.end("unknown project"); }
           if (!proj.created) { res.writeHead(403); return res.end("not created by this app"); }
-          fs.rmSync(proj.dir, { recursive: true, force: true });
-          projects = projects.filter((x) => x.id !== p.removeDisk);
-          saveProjects();
-          broadcast({ type: "projects.changed" }, false);
-          res.writeHead(200); return res.end("ok");
+          // Folders die hard on Windows: a dev server an agent left running
+          // (next dev, vite, …) or the project's own terminal keeps files
+          // locked and rmSync silently half-deletes. Order of battle:
+          // close our project window → kill processes anchored in the dir →
+          // delete with retries → readable error if something still holds on.
+          const pid = p.removeDisk;
+          winproj("stop", pid, () => winproj("killdir", proj.dir, () => {
+            setTimeout(() => {
+              try {
+                fs.rmSync(proj.dir, { recursive: true, force: true,
+                  maxRetries: 6, retryDelay: 350 });
+              } catch (e) {
+                res.writeHead(409, { "content-type": "text/plain; charset=utf-8" });
+                return res.end(`ลบไม่สำเร็จ — มีไฟล์ในโฟลเดอร์ถูกใช้งานอยู่ (${e.code || e.message}). ` +
+                  `ปิดโปรแกรม/เทอร์มินัลที่ค้างอยู่ในโฟลเดอร์นี้แล้วกด 🗑 อีกครั้ง`);
+              }
+              projects = projects.filter((x) => x.id !== pid);
+              saveProjects();
+              broadcast({ type: "projects.changed" }, false);
+              res.writeHead(200); res.end("ok");
+            }, 700);
+          }));
+          return;
         }
         const proj = createProject(p.name, p.place, p.path);
         res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
@@ -1479,11 +1493,12 @@ const server = http.createServer((req, res) => {
           launch("", path.basename(dir));
         } else {
           ensureTrusted(dir);  // no trust dialog ambush in the new window
-          // Smart entry: no sessions → fresh claude; one → resume IT by id
-          // (claude -c ignores headless-born sessions!); several → -r picker.
-          const n = claudeSessionCount(dir);
+          // Smart entry: resume the NEWEST session explicitly — straight into
+          // where the work happened (claude -c ignores headless-born sessions
+          // and -r dumps a picker nobody asked for). Fresh claude only when
+          // the project has no sessions yet.
           const sid = newestSid(dir);
-          const cmd = !sid ? "claude" : n > 1 ? "claude -r" : `claude --resume ${sid}`;
+          const cmd = sid ? `claude --resume ${sid}` : "claude";
           launch(`-Command "${cmd} #BAGIDEA_PROJ_${id}"`, `BAGIDEA_PROJ_${id}`);
           setTimeout(sweepProjects, 2500);
         }

@@ -290,7 +290,9 @@
   body.feedmode main, body.feedmode footer, body.feedmode #rail,
   body.feedmode #threadBar, body.feedmode #sideTab,
   body.feedmode header { display: none !important; }
-  body.feedmode { background: rgba(4, 7, 13, 0.92); }
+  /* Mouse-over = reading: the glass turns near-solid so text pops. */
+  body.feedmode { background: rgba(4, 7, 13, 0.92); transition: background 0.3s; }
+  body.feedmode:hover { background: rgba(4, 7, 13, 0.985); }
   body.feedmode #feedHead {
     display: flex; align-items: center; gap: 7px;
     position: fixed; top: 0; left: 0; right: 0; height: 30px; padding: 0 12px;
@@ -298,14 +300,28 @@
     background: rgba(16, 24, 42, 0.85); border-bottom: 1px solid var(--line);
   }
   #feedConn { width: 7px; height: 7px; border-radius: 50%; background: #4ade80;
-    box-shadow: 0 0 7px #4ade8088; margin-left: auto; }
+    box-shadow: 0 0 7px #4ade8088; }
+  #feedClear {
+    margin-left: auto; padding: 2px 8px; font-size: 11px; cursor: pointer;
+    color: #9fb6d8; background: rgba(255,255,255,0.05);
+    border: 1px solid var(--line); border-radius: 7px;
+  }
+  #feedClear:hover { color: #dbe7ff; border-color: var(--accent); }
+  /* column-reverse = newest sits at the bottom AND history scrolls naturally */
   body.feedmode #feed {
-    display: flex; flex-direction: column; gap: 5px;
+    display: flex; flex-direction: column-reverse; gap: 5px;
     position: fixed; top: 34px; bottom: 6px; left: 6px; right: 6px;
-    overflow-y: hidden; padding: 2px;
-    justify-content: flex-end;  /* newest at the bottom, like stream chat */
+    overflow-y: auto; padding: 2px;
     mask-image: linear-gradient(to bottom, transparent, black 12%);
   }
+  .fitem .fpbtns { display: flex; gap: 5px; margin-top: 5px; }
+  .fitem .fpbtns button {
+    flex: 1; padding: 3px 6px; font-size: 10.5px; cursor: pointer;
+    border: 1px solid var(--line); border-radius: 6px;
+    background: rgba(255,255,255,0.06); color: #dfe9ff;
+  }
+  .fitem .fpbtns .ok { color: #4ade80; border-color: #4ade8055; }
+  .fitem .fpbtns .no { color: #ff8a7a; border-color: #ff584855; }
   #feedEmpty {
     color: rgba(140, 158, 188, 0.55); font-size: 11px; text-align: center;
     padding: 10px 0;
@@ -393,6 +409,10 @@
   .arow .meta { min-width: 0; flex: 1; }
   .arow .meta b { font-size: 13px; display: block; }
   .arow .meta span { font-size: 11px; color: var(--dim); }
+  /* Fixed-height rows: confirm messages swap in-place, never reflow the list */
+  .arow .meta b, .arow .meta span {
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;
+  }
   .arow .lock { font-size: 12px; color: var(--dim); }
   .bigbtn {
     width: 100%; padding: 9px; margin-top: 4px; font-size: 12.5px; cursor: pointer;
@@ -540,7 +560,8 @@
      Toggled by right-clicking the chat head (the shell flips the window). -->
 <div id="feedHead">
   <img src="\brand\logo_ico_cute.png" width="16" height="16" draggable="false">
-  <span>📡 OFFICE FEED</span><span id="feedConn"></span>
+  <span>📡 OFFICE FEED</span>
+  <button id="feedClear" title="ล้างรายการ log">🧹 ล้าง</button><span id="feedConn"></span>
 </div>
 <div id="feed">
   <div id="feedEmpty">— เงียบสงบ… รอความเคลื่อนไหวในออฟฟิศ —</div>
@@ -929,8 +950,12 @@
       _feedSavedModal = false;
     }
     document.body.classList.toggle("feedmode", on);
-    if (on) feedEl.scrollTop = feedEl.scrollHeight;
+    if (on) feedEl.scrollTop = 0;  // column-reverse: 0 = the live bottom edge
   };
+  // column-reverse stream: newest = FIRST child (renders at the bottom),
+  // scrollTop 0 = bottom. History scrolls; we only auto-stick when the user
+  // is already at the live edge — scrolled-up reading is never yanked away.
+  const FEED_CAP = 60;
   function addFeed(id, text, session, kind = "") {
     const d = document.createElement("div");
     d.className = "fitem" + (kind ? " " + kind : "");
@@ -955,9 +980,54 @@
     d.append(f, t);
     const empty = document.getElementById("feedEmpty");
     if (empty) empty.remove();
-    feedEl.appendChild(d);
-    while (feedEl.children.length > 60) feedEl.removeChild(feedEl.firstChild);
-    feedEl.scrollTop = feedEl.scrollHeight;
+    const stick = feedEl.scrollTop > -30;  // at (or near) the live edge?
+    feedEl.insertBefore(d, feedEl.firstChild);
+    while (feedEl.children.length > FEED_CAP) feedEl.removeChild(feedEl.lastChild);
+    if (stick) feedEl.scrollTop = 0;
+    return d;
+  }
+  function clearFeed() {
+    feedEl.innerHTML = `<div id="feedEmpty">— เงียบสงบ… รอความเคลื่อนไหวในออฟฟิศ —</div>`;
+  }
+  document.getElementById("feedClear").onclick = clearFeed;
+  // Permission requests become ACTIONABLE cards right in the stream — the
+  // same broker answers, no mode-switch needed to unblock an agent.
+  function addFeedPerm(ev) {
+    const d = addFeed(ev.agent, "🛡 ขอใช้ " + ev.tool, ev.session || "", "alert");
+    d.id = "fperm-" + ev.perm;
+    let inp = "";
+    try { inp = JSON.stringify(JSON.parse(ev.input)); } catch { inp = String(ev.input || ""); }
+    if (inp && inp !== "{}" && inp !== '""') {
+      const pre = document.createElement("div");
+      pre.style.cssText = "font-size:10px;color:var(--dim);word-break:break-all;margin-top:2px";
+      pre.textContent = inp.slice(0, 130);
+      d.querySelector(".ftxt").appendChild(pre);
+    }
+    const row = document.createElement("div");
+    row.className = "fpbtns";
+    row.innerHTML = `<button class="ok">✓ อนุญาต</button>` +
+      `<button class="ok" title="อนุญาต ${ev.tool} ให้ agent นี้ตลอดไป">✓✓ ตลอดไป</button>` +
+      `<button class="no">✗ ไม่</button>`;
+    const bt = row.querySelectorAll("button");
+    bt[0].onclick = () => respondPerm(ev.perm, "allow");
+    bt[1].onclick = () => respondPerm(ev.perm, "allow", true);
+    bt[2].onclick = () => respondPerm(ev.perm, "deny");
+    d.querySelector(".ftxt").appendChild(row);
+  }
+  // Verdict arrives (clicked here, on the main panel, or via rule/timeout):
+  // swap the buttons for the outcome. Returns false when no card existed.
+  function resolveFeedPerm(perm, txt, ok) {
+    const el = document.getElementById("fperm-" + perm);
+    if (!el) return false;
+    const row = el.querySelector(".fpbtns");
+    if (row) {
+      const v = document.createElement("div");
+      v.style.cssText = `font-size:10.5px;margin-top:4px;color:${ok ? "#4ade80" : "#ff8a7a"}`;
+      v.textContent = txt;
+      row.replaceWith(v);
+    }
+    el.classList.remove("alert");
+    return true;
   }
   // One mirror for everything worth glancing at while streaming/debugging.
   function feedRoute(ev) {
@@ -968,9 +1038,14 @@
     else if (ev.type === "subagent.progress") addFeed(ev.sub, "⚙ " + (ev.tool || "…"), sess, "ghostly");
     else if (ev.type === "subagent.spawned") addFeed(ev.sub, "👻 แตกร่างรับงาน: " + String(ev.text || "").slice(0, 80), sess, "ghostly");
     else if (ev.type === "subagent.done") addFeed(ev.sub, ev.ok ? "✓ งานเสร็จ กลับเข้าร่าง" : "✗ ล้มเหลว", sess, "ghostly");
-    else if (ev.type === "perm.requested") addFeed(ev.agent, "🛡 ขอใช้ " + ev.tool + " — รอ Allow/Deny (คลิกซ้าย chat head เพื่อสลับไปกด)", sess, "alert");
-    else if (ev.type === "perm.approved") addFeed(ev.agent, "🛡 " + ev.tool + " — allowed ✓", sess);
-    else if (ev.type === "perm.denied") addFeed(ev.agent, "🛡 " + ev.tool + " — denied ✗", sess);
+    else if (ev.type === "perm.requested") addFeedPerm(ev);
+    else if (ev.type === "perm.approved") {
+      if (!resolveFeedPerm(ev.perm, ev.via === "rule" ? "✓ อนุญาตอัตโนมัติ (ตามสิทธิ์ที่ให้ไว้)" : "✓ อนุญาตแล้ว", true))
+        addFeed(ev.agent, "🛡 " + ev.tool + " — allowed ✓", sess);
+    } else if (ev.type === "perm.denied") {
+      if (!resolveFeedPerm(ev.perm, ev.via === "timeout" ? "✗ หมดเวลา — ปฏิเสธอัตโนมัติ" : "✗ ไม่อนุญาต", false))
+        addFeed(ev.agent, "🛡 " + ev.tool + " — denied ✗", sess);
+    }
     else if (ev.type === "task.completed") addFeed(ev.agent, "✓ งานเสร็จ", sess);
     else if (ev.type === "task.failed") addFeed(ev.agent, "✗ งานล้มเหลว", sess);
     else if (ev.type === "task.delegated") addFeed("main", "📋 มอบหมายงานให้ " + nameOf(ev.target), sess);
@@ -1714,18 +1789,32 @@
             else {
               row.dataset.rm = "1";
               metaSpan().innerHTML =
-                `<span style="color:#ffb054">เอาออกจากรายการเฉยๆ (ไฟล์ยังอยู่ครบ) — กด ✕ อีกครั้งเพื่อยืนยัน</span>`;
+                `<span style="color:#ffb054">เอาออกจากรายการ (ไฟล์ยังอยู่) — กด ✕ ซ้ำเพื่อยืนยัน</span>`;
               setTimeout(() => { if (row.dataset.rm === "1") { row.dataset.rm = ""; openOps("proj"); } }, 4000);
             }
           };
-          // 🗑 real disk delete — created-by-app only.
-          if (p.created && b[4 + o]) b[4 + o].onclick = () => {
-            if (row.dataset.del === "1")
-              api("/projects", { removeDisk: p.id }).then(() => openOps("proj"));
-            else {
+          // 🗑 real disk delete — created-by-app only. Deletion can lose to
+          // file locks (a dev server left in the folder) — show the daemon's
+          // error right in the row instead of pretending it worked.
+          if (p.created && b[4 + o]) b[4 + o].onclick = async () => {
+            if (row.dataset.del === "1") {
+              metaSpan().innerHTML = `<span style="color:#ffb054">⏳ กำลังปิดโปรแกรมค้างในโฟลเดอร์แล้วลบ…</span>`;
+              const r = await fetch("/projects", {
+                method: "POST",
+                headers: { "content-type": "application/json", "x-bagidea-ui": "1" },
+                body: JSON.stringify({ removeDisk: p.id }),
+              });
+              if (r.ok) openOps("proj");
+              else {
+                row.dataset.del = "";
+                metaSpan().innerHTML =
+                  `<span style="color:#ff6258">${(await r.text()).replace(/</g, "&lt;")}</span>`;
+                setTimeout(() => openOps("proj"), 6000);
+              }
+            } else {
               row.dataset.del = "1";
               metaSpan().innerHTML =
-                `<span style="color:#ff6258">⚠ จะลบโฟลเดอร์ ${p.dir.replace(/</g, "&lt;")} ออกจากเครื่องจริงๆ — กด 🗑 อีกครั้งเพื่อยืนยัน</span>`;
+                `<span style="color:#ff6258">⚠ ลบโฟลเดอร์จริงจากเครื่อง — กด 🗑 ซ้ำเพื่อยืนยัน</span>`;
               setTimeout(() => { if (row.dataset.del === "1") { row.dataset.del = ""; openOps("proj"); } }, 5000);
             }
           };
@@ -2288,9 +2377,12 @@
     }
     if (ev.type === "projects.changed") {
       // Live-refresh the PROJECTS tab (status flips) — but never while the
-      // user is typing in a form or picking a folder.
-      const typing = ["INPUT", "TEXTAREA", "SELECT"].includes(
-        (document.activeElement || {}).tagName);
+      // user is typing in one of ITS OWN form fields or picking a folder.
+      // (Focus in the main chat input must NOT freeze the status — that bug
+      // made closed windows look alive until a button was clicked.)
+      const ae = document.activeElement || {};
+      const typing = ["INPUT", "TEXTAREA", "SELECT"].includes(ae.tagName) &&
+        modalCard.contains(ae);
       if (modal.classList.contains("open") && modalCard.querySelector("#plist") &&
           !fsPick.classList.contains("open") && !typing)
         openOps("proj");

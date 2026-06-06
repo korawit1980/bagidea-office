@@ -33,7 +33,29 @@ public class WU {
 "@
 
 # One process snapshot: child map for descendant walks.
-$all = Get-CimInstance Win32_Process | Select-Object ProcessId, ParentProcessId, Name, CommandLine
+$all = Get-CimInstance Win32_Process | Select-Object ProcessId, ParentProcessId, Name, CommandLine, ExecutablePath
+
+# killdir <path>: reap processes anchored INSIDE a project folder (dev
+# servers agents left behind, stray claude runs) so disk-delete can win.
+# Match = command line or exe path contains the folder path. NEVER touch
+# WindowsTerminal/explorer (shared hosts) or this very script's process —
+# its own command line contains the path argument.
+if ($Action -eq "killdir") {
+  $needle = $Id.Trim().ToLower()
+  if ($needle.Length -lt 8) { exit }   # refuse vague paths outright
+  foreach ($p in $all) {
+    if ($p.ProcessId -eq $PID) { continue }
+    if ($p.Name -in @("WindowsTerminal.exe", "explorer.exe", "svchost.exe")) { continue }
+    $cl = ([string]$p.CommandLine).ToLower()
+    $ep = ([string]$p.ExecutablePath).ToLower()
+    if ($cl.Contains($needle) -or ($ep -and $ep.Contains($needle))) {
+      taskkill /PID $p.ProcessId /T /F | Out-Null
+      Write-Output "killed $($p.ProcessId) $($p.Name)"
+    }
+  }
+  exit
+}
+
 $kids = @{}
 foreach ($p in $all) {
   $pp = [string]$p.ParentProcessId
