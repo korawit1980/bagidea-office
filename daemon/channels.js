@@ -99,8 +99,12 @@ function wsConnect(host, path, hooks) {
 module.exports = function initChannels(ctx) {
   // ctx: getConfig() → reg.channels, onMessage(channel, from, text, reply), log(s)
   const state = { telegram: "off", discord: "off", line: "off" };
-  let tgAlive = false;
-  let dcSock = null, dcBeat = null, dcSeq = null, dcWant = false;
+  // Generation tokens, NOT shared booleans: a restart bumps the generation,
+  // and any in-flight long-poll / reconnect from an older generation dies
+  // the moment it next checks — a shared "alive" flag resurrected old
+  // pollers after a restart (two getUpdates → Telegram 409 Conflict).
+  let tgGen = 0, dcGen = 0;
+  let dcSock = null, dcBeat = null, dcSeq = null;
 
   const log = (s) => ctx.log && ctx.log("[chan] " + s);
 
@@ -109,14 +113,15 @@ module.exports = function initChannels(ctx) {
     const cfg = (ctx.getConfig().telegram) || {};
     if (!cfg.enabled || !cfg.token) { state.telegram = "off"; return; }
     state.telegram = "connecting";
-    tgAlive = true;
+    const gen = ++tgGen;
+    const live = () => gen === tgGen;
     let offset = 0;
     const poll = () => {
-      if (!tgAlive) return;
+      if (!live()) return;
       jreq("GET", "api.telegram.org",
         `/bot${cfg.token}/getUpdates?timeout=50&offset=${offset}`, null, null,
         (e, j) => {
-          if (!tgAlive) return;
+          if (!live()) return;
           if (e || !j) { state.telegram = "error"; return setTimeout(poll, 8000); }
           if (!j.ok) { state.telegram = "error: " + (j.description || "bad token"); return setTimeout(poll, 15000); }
           state.telegram = "on";
@@ -151,11 +156,13 @@ module.exports = function initChannels(ctx) {
   // ---- Discord: a real gateway session (IDENTIFY → MESSAGE_CREATE).
   function startDiscord() {
     const cfg = (ctx.getConfig().discord) || {};
-    dcWant = !!(cfg.enabled && cfg.token);
-    if (!dcWant) { state.discord = "off"; return; }
+    if (!(cfg.enabled && cfg.token)) { state.discord = "off"; return; }
     state.discord = "connecting";
+    const gen = ++dcGen;
+    const live = () => gen === dcGen;
     const sock = wsConnect("gateway.discord.gg", "/?v=10&encoding=json", {
       onMsg: (raw) => {
+        if (!live()) return;
         let m;
         try { m = JSON.parse(raw); } catch { return; }
         if (m.s) dcSeq = m.s;
@@ -185,9 +192,9 @@ module.exports = function initChannels(ctx) {
       },
       onClose: () => {
         clearInterval(dcBeat);
-        if (dcWant) {
+        if (live()) {
           state.discord = "reconnecting";
-          setTimeout(startDiscord, 6000);
+          setTimeout(() => { if (live()) startDiscord(); }, 6000);
         } else state.discord = "off";
       },
     });
@@ -237,8 +244,8 @@ module.exports = function initChannels(ctx) {
   }
 
   function stopAll() {
-    tgAlive = false;
-    dcWant = false;
+    tgGen++;   // orphan every in-flight poll — they die on next check
+    dcGen++;
     clearInterval(dcBeat);
     if (dcSock) { try { dcSock.close(); } catch {} dcSock = null; }
   }
