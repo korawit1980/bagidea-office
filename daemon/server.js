@@ -2290,6 +2290,39 @@ const server = http.createServer((req, res) => {
     }
     serveMedia(res, norm);
 
+  } else if (req.method === "POST" && req.url === "/registry/key/test") {
+    // 🧪 verify a main key actually works (a tiny authenticated call).
+    readBody(req, (body) => {
+      try {
+        const { name } = JSON.parse(body);
+        const val = (reg.apiKeys || {})[name];
+        if (!val) { res.writeHead(200, { "content-type": "application/json" });
+          return res.end(JSON.stringify({ ok: false, msg: "ยังไม่ได้ตั้ง key" })); }
+        const done = (ok, msg) => { res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
+          res.end(JSON.stringify({ ok, msg })); };
+        const https = require("https");
+        if (name === "OPENAI_API_KEY") {
+          const rq = https.request({ method: "GET", host: "api.openai.com", path: "/v1/models",
+            headers: { authorization: "Bearer " + val } }, (rs) => {
+            rs.resume();
+            done(rs.statusCode === 200, rs.statusCode === 200 ? "ใช้งานได้ ✓" : "key ไม่ผ่าน (HTTP " + rs.statusCode + ")");
+          });
+          rq.setTimeout(12000, () => rq.destroy(new Error("timeout")));
+          rq.on("error", (e) => done(false, e.message));
+          rq.end();
+        } else if (name === "GEMINI_API_KEY") {
+          const rq = https.request({ method: "GET", host: "generativelanguage.googleapis.com",
+            path: "/v1beta/models?key=" + val }, (rs) => {
+            rs.resume();
+            done(rs.statusCode === 200, rs.statusCode === 200 ? "ใช้งานได้ ✓" : "key ไม่ผ่าน (HTTP " + rs.statusCode + ")");
+          });
+          rq.setTimeout(12000, () => rq.destroy(new Error("timeout")));
+          rq.on("error", (e) => done(false, e.message));
+          rq.end();
+        } else done(true, "ตั้งค่าแล้ว");
+      } catch (e) { res.writeHead(400); res.end(String(e.message)); }
+    });
+
   } else if (req.method === "GET" && req.url === "/features") {
     res.writeHead(200, { "content-type": "application/json" });
     res.end(JSON.stringify(featuresMap()));

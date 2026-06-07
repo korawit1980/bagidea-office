@@ -734,6 +734,7 @@
   <input id="filePick" type="file" multiple style="display:none">
   <button class="send" id="attachBtn" title="แนบไฟล์ (หรือลากมาวางได้เลย)">📎</button>
   <button class="send" id="micBtn" title="พูดแทนพิมพ์">🎤</button>
+  <button class="send" id="liveBtn" title="คุยเสียงสด (realtime)">📞</button>
   <button class="send" id="sessBtn" title="Chat sessions (threads)">🧵</button>
   <button class="send" id="send">➤</button>
 </footer>
@@ -1111,6 +1112,8 @@
   function gateVoiceUI() {
     document.querySelectorAll(".send[id$='Mic'], #micBtn").forEach((b) =>
       b.classList.toggle("nokey", !FEATURES.stt));
+    const lb = document.getElementById("liveBtn");
+    if (lb) lb.classList.toggle("nokey", !FEATURES.live);
   }
   function voiceGateFail() {
     pillShow("✗ ฟีเจอร์เสียงต้องมี Main API key (OpenAI หรือ Gemini)", "เปิดหน้าตั้งค่าให้แล้ว", false);
@@ -1150,6 +1153,75 @@
     recStop();
     if (msg) { pillShow(msg, "", false); setTimeout(pillHide, 2500); } else pillHide();
   }
+
+  // ---- 📞 realtime voice chat (Gemini Live via the daemon relay) ----------
+  let LIVE = null;
+  async function liveStart() {
+    if (!FEATURES.live) {
+      addChip("📞 Realtime ต้องมี GEMINI_API_KEY — ตั้งใน ⚙ CONNECT");
+      return openSettings("connect");
+    }
+    const btn = document.getElementById("liveBtn");
+    let stream;
+    try { stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1 } }); }
+    catch { return addChip("📞 เปิดไมค์ไม่ได้ — กดอนุญาตไมค์ก่อน"); }
+    const ws = new WebSocket(`ws://127.0.0.1:8787/live?agent=${encodeURIComponent(target)}`);
+    const ctxIn = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+    const playCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
+    let playAt = 0;
+    LIVE = { ws, stream, ctxIn, playCtx };
+    btn.classList.add("rec");
+    pillShow("📞 กำลังเชื่อมต่อสายสด…", "กด 📞 อีกครั้งเพื่อวางสาย", false);
+
+    ws.onmessage = (ev) => {
+      let m; try { m = JSON.parse(ev.data); } catch { return; }
+      if (m.type === "live-ready") pillShow("📞 สายต่อแล้ว — พูดได้เลย", "กด 📞 เพื่อวางสาย", true);
+      else if (m.type === "error") { addChip("📞 " + m.text); liveStop(); }
+      else if (m.type === "audio") {
+        // 24k PCM16 → schedule back-to-back for smooth playback.
+        const pcm = Uint8Array.from(atob(m.data), (c) => c.charCodeAt(0));
+        const i16 = new Int16Array(pcm.buffer);
+        const f32 = Float32Array.from(i16, (v) => v / 32768);
+        const b = playCtx.createBuffer(1, f32.length, 24000);
+        b.getChannelData(0).set(f32);
+        const src = playCtx.createBufferSource();
+        src.buffer = b; src.connect(playCtx.destination);
+        playAt = Math.max(playAt, playCtx.currentTime);
+        src.start(playAt); playAt += b.duration;
+      }
+    };
+    ws.onclose = () => liveStop();
+    ws.onerror = () => liveStop();
+    // mic → 16k PCM frames to the relay.
+    const src = ctxIn.createMediaStreamSource(stream);
+    const proc = ctxIn.createScriptProcessor(4096, 1, 1);
+    LIVE.proc = proc;
+    proc.onaudioprocess = (e) => {
+      if (ws.readyState !== 1) return;
+      const d = e.inputBuffer.getChannelData(0);
+      const i16 = new Int16Array(d.length);
+      for (let i = 0; i < d.length; i++) {
+        const v = Math.max(-1, Math.min(1, d[i]));
+        i16[i] = v < 0 ? v * 0x8000 : v * 0x7fff;
+      }
+      let bin = "";
+      const u8 = new Uint8Array(i16.buffer);
+      for (let i = 0; i < u8.length; i++) bin += String.fromCharCode(u8[i]);
+      ws.send(JSON.stringify({ type: "audio", data: btoa(bin) }));
+    };
+    src.connect(proc); proc.connect(ctxIn.destination);
+  }
+  function liveStop() {
+    const L = LIVE; LIVE = null;
+    document.getElementById("liveBtn").classList.remove("rec");
+    pillHide();
+    if (!L) return;
+    try { L.proc && L.proc.disconnect(); } catch {}
+    try { L.stream.getTracks().forEach((t) => t.stop()); } catch {}
+    try { L.ctxIn.close(); L.playCtx.close(); } catch {}
+    try { L.ws.close(); } catch {}
+  }
+  document.getElementById("liveBtn").onclick = () => LIVE ? liveStop() : liveStart();
 
   // 🗣 agent speech playback — one voice at a time, in order.
   const _sayQ = [];
@@ -1536,22 +1608,41 @@
       const card = document.createElement("div");
       card.className = "arow";
       card.style.cursor = "default";
+      // Main keys are REQUIRED infrastructure — never deletable. Two states:
+      // set (✅ test / replace) and unset (paste + save). No ✕.
       card.innerHTML =
         `<div class="meta"><b>${has ? "✅" : "⚠️"} ${label} <span style="font-weight:400;color:var(--dim);font-size:10px">(${name})</span></b>
-          <span>${has ? "ตั้งค่าแล้ว — " + feats : "ยังไม่ได้ตั้ง → " + feats + " จะใช้ไม่ได้ · ขอ key: " + where}</span></div>` +
+          <span class="kstat">${has ? "ตั้งค่าแล้ว — " + feats : "ยังไม่ได้ตั้ง → " + feats + " จะใช้ไม่ได้ · ขอ key: " + where}</span></div>` +
         (has
-          ? `<div class="winbtn hide" title="ลบ key">✕</div>`
+          ? `<div class="winbtn" data-a="test" title="ทดสอบว่า key ใช้งานได้จริง">🧪</div>
+             <div class="winbtn" data-a="change" title="เปลี่ยน key ใหม่">🔄</div>`
           : `<input type="password" placeholder="วาง key…" autocomplete="new-password"
-               style="flex:0 0 150px;margin:0"><div class="winbtn" title="บันทึก">💾</div>`);
-      if (has) {
-        card.querySelector(".winbtn").onclick = () =>
-          api("/registry/key", { name, remove: true }).then(() => openSettings("connect"));
-      } else {
-        card.querySelector(".winbtn").onclick = () => {
-          const v = card.querySelector("input").value.trim();
-          if (v) api("/registry/key", { name, value: v }).then(() => openSettings("connect"));
+               style="flex:0 0 140px;margin:0"><div class="winbtn" data-a="save" title="บันทึก">💾</div>`);
+      const stat = card.querySelector(".kstat");
+      const saveKey = (v) => { if (v) api("/registry/key", { name, value: v }).then(() => openSettings("connect")); };
+      card.querySelectorAll(".winbtn").forEach((btn) => {
+        const act = btn.dataset.a;
+        if (act === "save") btn.onclick = () => saveKey(card.querySelector("input").value.trim());
+        else if (act === "test") btn.onclick = async () => {
+          stat.textContent = "🧪 กำลังทดสอบ…";
+          const r = await api("/registry/key/test", { name });
+          stat.innerHTML = `<span style="color:${r.ok ? "#4ade80" : "#ff6258"}">${r.ok ? "✅ " : "❌ "}${r.msg}</span>`;
         };
-      }
+        else if (act === "change") btn.onclick = () => {
+          // swap the row to an input to paste a replacement (no delete needed).
+          const meta = card.querySelector(".meta");
+          card.innerHTML = "";
+          card.appendChild(meta);
+          const inp = document.createElement("input");
+          inp.type = "password"; inp.placeholder = "วาง key ใหม่…"; inp.autocomplete = "new-password";
+          inp.style.cssText = "flex:0 0 140px;margin:0";
+          const ok = document.createElement("div");
+          ok.className = "winbtn"; ok.textContent = "💾"; ok.title = "บันทึก";
+          ok.onclick = () => saveKey(inp.value.trim());
+          card.append(inp, ok);
+          inp.focus();
+        };
+      });
       mainBox.appendChild(card);
     }
     // ── extra keys vault (main keys live above, not here).
