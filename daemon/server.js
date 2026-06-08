@@ -2390,7 +2390,9 @@ const server = http.createServer((req, res) => {
       fs.writeFileSync(path.join(tmp, "bagidea_editor_open_request"), String(Date.now()));
       // fallback: if the shell isn't running, launch directly after a beat
       const gdir = path.join(__dirname, "..", "godot");
-      const godot = process.env.BAGIDEA_GODOT || "E:\\Tools\\Godot\\Godot_v4.6.3-stable_win64.exe";
+      const branded = path.join(gdir, "bin", "BagIdeaOffice.exe");
+      const godot = fs.existsSync(branded) ? branded
+        : (process.env.BAGIDEA_GODOT || "E:\\Tools\\Godot\\Godot_v4.6.3-stable_win64.exe");
       const shellUp = fs.existsSync(path.join(tmp, "bagidea_shell_alive"));
       if (!shellUp && fs.existsSync(godot)) {
         spawn(godot, ["--path", gdir, "--", "--editor3d"],

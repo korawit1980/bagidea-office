@@ -37,6 +37,9 @@ _assets_tmp/
 *.7z
 godot/assets/env/
 godot/assets/decor/
+# branded Godot runtime (172MB, built by copying Godot + rcedit --set-icon)
+godot/bin/
+tools/rcedit-x64.exe
 
 _shots/
 shots/

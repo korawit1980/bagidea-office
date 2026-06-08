@@ -257,9 +257,20 @@ fn spawn_daemon(root: &PathBuf) -> Option<Child> {
         .ok()
 }
 
+// The Godot runtime to launch. Prefer the BRANDED copy (godot/bin/
+// BagIdeaOffice.exe — same binary, BAG IDEA icon baked into the .exe so there's
+// no Godot icon flash on the taskbar at all); fall back to the env/system Godot.
+fn godot_exe(root: &PathBuf) -> String {
+    let branded = root.join("godot").join("bin").join("BagIdeaOffice.exe");
+    if branded.exists() {
+        return branded.to_string_lossy().into_owned();
+    }
+    std::env::var("BAGIDEA_GODOT")
+        .unwrap_or_else(|_| r"E:\Tools\Godot\Godot_v4.6.3-stable_win64.exe".into())
+}
+
 fn spawn_office(root: &PathBuf, cx: i32, cy: i32) -> Option<Child> {
-    let godot = std::env::var("BAGIDEA_GODOT")
-        .unwrap_or_else(|_| r"E:\Tools\Godot\Godot_v4.6.3-stable_win64.exe".into());
+    let godot = godot_exe(root);
     if !std::path::Path::new(&godot).exists() {
         return None; // overlay-only mode
     }
@@ -282,8 +293,7 @@ fn spawn_office(root: &PathBuf, cx: i32, cy: i32) -> Option<Child> {
 // centre, hidden under the shell's circular splash. office_floor.gd grows it to
 // a framed 1280x800 editor window after the first frame.
 fn spawn_editor(root: &PathBuf, cx: i32, cy: i32) -> Option<Child> {
-    let godot = std::env::var("BAGIDEA_GODOT")
-        .unwrap_or_else(|_| r"E:\Tools\Godot\Godot_v4.6.3-stable_win64.exe".into());
+    let godot = godot_exe(root);
     if !std::path::Path::new(&godot).exists() {
         return None;
     }
