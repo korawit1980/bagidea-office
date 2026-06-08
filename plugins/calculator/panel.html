@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>🧮 Calculator</title>
+<style>
+  :root { --accent:#5ec8ff; --dim:#8294ab; }
+  * { box-sizing:border-box; margin:0; padding:0; font-family:'Segoe UI','Noto Sans Thai',sans-serif; }
+  body { background:#0c1322; color:#dbe7ff; padding:14px; user-select:none; }
+  h2 { font-size:13px; letter-spacing:1.5px; color:var(--accent); margin-bottom:10px; }
+  #disp { background:#0a0f1c; border:1px solid rgba(255,255,255,0.08); border-radius:10px;
+    padding:10px 12px; min-height:62px; text-align:right; }
+  #expr { font-size:15px; color:#dbe7ff; word-break:break-all; min-height:20px; outline:none; }
+  #res { font-size:22px; font-weight:700; color:var(--accent); margin-top:4px; min-height:26px; }
+  #hist { max-height:74px; overflow-y:auto; margin:8px 0; font-size:10.5px; color:var(--dim); text-align:right; }
+  #hist div { cursor:pointer; padding:1px 0; }
+  #hist div:hover { color:var(--accent); }
+  .grid { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; margin-top:8px; }
+  button { padding:11px 0; border-radius:9px; cursor:pointer; font-size:13px;
+    background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.10); color:#dbe7ff; }
+  button:hover { border-color:var(--accent); }
+  button.fn { color:#9fd4ff; font-size:11.5px; background:rgba(94,200,255,0.07); }
+  button.op { color:#ffd24a; }
+  button.eq { grid-column:span 2; background:rgba(94,200,255,0.16); border-color:var(--accent); color:#fff; }
+  button.danger { color:#ff7a7a; }
+</style></head>
+<body>
+<h2>🧮 CALCULATOR</h2>
+<div id="disp">
+  <div id="expr" contenteditable="true" spellcheck="false"></div>
+  <div id="res"></div>
+</div>
+<div id="hist"></div>
+<div class="grid">
+  <button class="fn" data-i="sin(">sin</button>
+  <button class="fn" data-i="cos(">cos</button>
+  <button class="fn" data-i="tan(">tan</button>
+  <button class="fn" data-i="ln(">ln</button>
+  <button class="fn" data-i="log(">log</button>
+
+  <button class="fn" data-i="sqrt(">√</button>
+  <button class="fn" data-i="^">x^y</button>
+  <button class="fn" data-i="!">x!</button>
+  <button class="fn" data-i="pi">π</button>
+  <button class="fn" data-i="e">e</button>
+
+  <button class="danger" id="clr">C</button>
+  <button class="danger" id="bks">⌫</button>
+  <button data-i="(">(</button>
+  <button data-i=")">)</button>
+  <button class="op" data-i="%">%</button>
+
+  <button data-i="7">7</button>
+  <button data-i="8">8</button>
+  <button data-i="9">9</button>
+  <button class="op" data-i="/">÷</button>
+  <button class="op" data-i="*">×</button>
+
+  <button data-i="4">4</button>
+  <button data-i="5">5</button>
+  <button data-i="6">6</button>
+  <button class="op" data-i="-">−</button>
+  <button class="op" data-i="+">+</button>
+
+  <button data-i="1">1</button>
+  <button data-i="2">2</button>
+  <button data-i="3">3</button>
+  <button data-i="0">0</button>
+  <button data-i=".">.</button>
+
+  <button class="eq" id="eq">=</button>
+  <button class="fn" data-i="rad(">rad</button>
+  <button class="fn" data-i="deg(">deg</button>
+  <button class="fn" data-i="abs(">|x|</button>
+</div>
+<script>
+  const E = document.getElementById("expr"), R = document.getElementById("res"), H = document.getElementById("hist");
+  let hist = [];
+  const ins = (t) => { E.textContent += t; preview(); E.focus(); };
+  async function calc(expr) {
+    if (!expr.trim()) return null;
+    try {
+      const r = await (await fetch("/plugin/calculator/eval?e=" + encodeURIComponent(expr))).json();
+      return r.ok ? r.result : null;
+    } catch { return null; }
+  }
+  let t;
+  function preview() {
+    clearTimeout(t);
+    t = setTimeout(async () => {
+      const v = await calc(E.textContent);
+      R.textContent = (v === null || v === undefined) ? "" : "= " + (+v.toFixed(10));
+    }, 120);
+  }
+  async function equals() {
+    const expr = E.textContent.trim();
+    const v = await calc(expr);
+    if (v === null) { R.textContent = "Error"; return; }
+    const out = +v.toFixed(10);
+    R.textContent = "= " + out;
+    hist.unshift({ expr, out }); hist = hist.slice(0, 12); renderHist();
+    E.textContent = String(out); placeCaretEnd();
+  }
+  function renderHist() {
+    H.innerHTML = "";
+    for (const h of hist) {
+      const d = document.createElement("div");
+      d.textContent = h.expr + " = " + h.out;
+      d.onclick = () => { E.textContent = h.expr; preview(); };
+      H.appendChild(d);
+    }
+  }
+  function placeCaretEnd() {
+    E.focus();
+    const r = document.createRange(); r.selectNodeContents(E); r.collapse(false);
+    const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+  }
+  document.querySelectorAll("button[data-i]").forEach((b) => b.onclick = () => ins(b.dataset.i));
+  document.getElementById("clr").onclick = () => { E.textContent = ""; R.textContent = ""; };
+  document.getElementById("bks").onclick = () => { E.textContent = E.textContent.slice(0, -1); preview(); };
+  document.getElementById("eq").onclick = equals;
+  E.addEventListener("input", preview);
+  E.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); equals(); } });
+</script>
+</body></html>

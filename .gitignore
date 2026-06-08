@@ -62,3 +62,4 @@ dist/
 daemon/presets.json
 daemon/assets.json
 daemon/stats.json
+daemon/proposals.json
