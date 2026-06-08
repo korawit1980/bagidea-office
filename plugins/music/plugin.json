@@ -11,6 +11,7 @@
     { "name": "prev", "args": "", "desc": "เพลงก่อนหน้า" },
     { "name": "loop", "args": "on|off", "desc": "วนเพลย์ลิสต์" },
     { "name": "volume", "args": "0-100", "desc": "ปรับเสียง" },
+    { "name": "remove", "args": "<ชื่อเพลง/หมายเลข>", "desc": "ลบเพลงออกจากเพลย์ลิสต์" },
     { "name": "status", "args": "", "desc": "ดูว่ากำลังเล่นอะไร" }
   ],
   "needsKeys": []

@@ -59,6 +59,20 @@ module.exports = (ctx) => {
       case "prev": state.index = list.length ? (state.index - 1 + list.length) % list.length : 0; state.playing = true; push("⏮"); return reply({ ok: true, track: list[state.index] });
       case "loop": state.loop = a !== "off"; push(state.loop ? "🔁 วนเปิด" : "วนปิด"); return reply({ ok: true, loop: state.loop });
       case "volume": { const v = Math.max(0, Math.min(100, parseInt(a, 10) || state.volume)); state.volume = v; push("🔊 " + v); return reply({ ok: true, volume: v }); }
+      case "remove": {
+        if (!list.length) return reply({ ok: false, msg: "ไม่มีเพลงให้ลบ" });
+        const n = parseInt(a, 10);
+        const idx = (!isNaN(n) && n >= 1 && n <= list.length) ? n - 1
+          : list.findIndex((f) => f.toLowerCase().includes(a.toLowerCase()));
+        const f = list[idx];
+        if (idx < 0 || !f) return reply({ ok: false, msg: "ไม่พบเพลง: " + a });
+        try { fs.unlinkSync(path.join(TRACKS_DIR, f)); } catch (e) { return reply({ ok: false, msg: e.message }); }
+        const after = playlist();
+        if (state.index >= after.length) state.index = Math.max(0, after.length - 1);
+        if (!after.length) state.playing = false;
+        push("🗑 ลบ " + f);
+        return reply({ ok: true, removed: f, count: after.length });
+      }
       case "status": return reply({ ok: true, ...state, count: list.length, track: list[state.index] || null });
       default: return reply({ ok: false, msg: "ไม่รู้จักคำสั่ง: " + cmd });
     }
@@ -74,7 +88,8 @@ module.exports = (ctx) => {
         res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
         res.end(JSON.stringify({ ...state, list, count: list.length }));
       },
-      // GET /plugin/music/track?i=N — stream a track to the panel
+      // GET /plugin/music/track?i=N — stream a track (with Range, so the panel
+      // can seek/scrub).
       track(req, res) {
         const i = parseInt(new URL(req.url, "http://x").searchParams.get("i"), 10) || 0;
         const list = playlist();
@@ -83,9 +98,33 @@ module.exports = (ctx) => {
         const full = path.join(TRACKS_DIR, f);
         const ext = f.split(".").pop().toLowerCase();
         const mime = { mp3: "audio/mpeg", ogg: "audio/ogg", wav: "audio/wav", m4a: "audio/mp4" }[ext];
-        const data = fs.readFileSync(full);
-        res.writeHead(200, { "content-type": mime, "cache-control": "max-age=3600" });
-        res.end(data);
+        const size = fs.statSync(full).size;
+        const range = req.headers.range;
+        if (range) {
+          const m = /bytes=(\d+)-(\d*)/.exec(range) || [];
+          const start = parseInt(m[1], 10) || 0;
+          const end = m[2] ? parseInt(m[2], 10) : size - 1;
+          res.writeHead(206, { "content-type": mime, "accept-ranges": "bytes",
+            "content-range": `bytes ${start}-${end}/${size}`, "content-length": end - start + 1 });
+          fs.createReadStream(full, { start, end }).pipe(res);
+        } else {
+          res.writeHead(200, { "content-type": mime, "accept-ranges": "bytes", "content-length": size });
+          fs.createReadStream(full).pipe(res);
+        }
+      },
+      // POST /plugin/music/upload?name=song.mp3 — add a track (raw file body)
+      upload(req, res, { readBodyRaw }) {
+        const name = (new URL(req.url, "http://x").searchParams.get("name") || "")
+          .replace(/[^\w.\- ก-๙]/g, "_");
+        if (!/\.(mp3|ogg|wav|m4a)$/i.test(name)) { res.writeHead(400); return res.end("need .mp3/.ogg/.wav/.m4a"); }
+        readBodyRaw(req, (buf) => {
+          try {
+            fs.writeFileSync(path.join(TRACKS_DIR, name), buf);
+            push("➕ เพิ่ม " + name);
+            res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
+            res.end(JSON.stringify({ ok: true, name }));
+          } catch (e) { res.writeHead(500); res.end(String(e.message)); }
+        });
       },
     },
   };
