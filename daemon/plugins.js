@@ -30,7 +30,8 @@ module.exports = function initPlugins(ctx) {
   function load() {
     plugins = {};
     let entries = [];
-    try { entries = fs.readdirSync(DIR, { withFileTypes: true }).filter((e) => e.isDirectory()); }
+    try { entries = fs.readdirSync(DIR, { withFileTypes: true })
+      .filter((e) => e.isDirectory() && !e.name.startsWith(".")); }
     catch { return; }
     for (const e of entries) {
       const dir = path.join(DIR, e.name);

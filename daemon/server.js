@@ -2547,20 +2547,28 @@ const server = http.createServer((req, res) => {
         if (!/^https:\/\/(github\.com|gitlab\.com|[\w.-]+)\/[\w.\-/]+$/.test(url))
           throw new Error("ใส่ลิงก์ git repo ที่ขึ้นต้น https:// ของ plugin");
         if (!url.endsWith(".git")) url += ".git";
-        const name = url.split("/").pop().replace(/\.git$/, "").replace(/[^\w-]/g, "");
-        const dest = path.join(__dirname, "..", "plugins", name);
-        if (fs.existsSync(dest)) throw new Error("มี plugin ชื่อนี้แล้ว: " + name);
+        // Clone into a temp folder first, then move it to plugins/<id> using
+        // the id from its OWN manifest — so the install folder always matches
+        // the plugin id (remove + core protection look it up by id).
+        const pluginsRoot = path.join(__dirname, "..", "plugins");
+        const tmp = path.join(pluginsRoot, ".installing-" + Date.now());
         const { execFile } = require("child_process");
-        execFile("git", ["clone", "--depth", "1", url, dest], { timeout: 60000 }, (e) => {
-          if (e || !fs.existsSync(path.join(dest, "plugin.json"))) {
-            try { fs.rmSync(dest, { recursive: true, force: true }); } catch {}
-            res.writeHead(400, { "content-type": "text/plain; charset=utf-8" });
-            return res.end(e ? "clone ไม่สำเร็จ: " + e.message : "repo นี้ไม่มี plugin.json — ไม่ใช่ plugin ที่ถูกต้อง");
-          }
+        execFile("git", ["clone", "--depth", "1", url, tmp], { timeout: 60000 }, (e) => {
+          const fail = (msg) => { try { fs.rmSync(tmp, { recursive: true, force: true }); } catch {}
+            res.writeHead(400, { "content-type": "text/plain; charset=utf-8" }); res.end(msg); };
+          if (e || !fs.existsSync(path.join(tmp, "plugin.json")))
+            return fail(e ? "clone ไม่สำเร็จ: " + e.message : "repo นี้ไม่มี plugin.json — ไม่ใช่ plugin ที่ถูกต้อง");
+          let man = {}; try { man = JSON.parse(fs.readFileSync(path.join(tmp, "plugin.json"), "utf8")); } catch {}
+          const repoName = url.split("/").pop().replace(/\.git$/, "");
+          const id = String(man.id || repoName).replace(/[^\w-]/g, "");
+          if (!id) return fail("plugin.json ไม่มี id ที่ถูกต้อง");
+          const dest = path.join(pluginsRoot, id);
+          if (fs.existsSync(dest)) return fail("มี plugin ชื่อนี้แล้ว: " + id);
+          try { fs.renameSync(tmp, dest); } catch (err) { return fail("ติดตั้งไม่สำเร็จ: " + err.message); }
           plugins.load();
           broadcast({ type: "plugins.changed" }, false);
           res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
-          res.end(JSON.stringify({ ok: true, name }));
+          res.end(JSON.stringify({ ok: true, name: id }));
         });
       } catch (e) { res.writeHead(400, { "content-type": "text/plain; charset=utf-8" }); res.end(String(e.message)); }
     });
