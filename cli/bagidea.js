@@ -10,6 +10,30 @@ const { spawn, execFileSync } = require("child_process");
 const ROOT = path.join(__dirname, "..");
 const BASE = "http://127.0.0.1:8787";
 
+// ---- palette (truecolor; degrades fine on basic terminals) -------------------
+const c = {
+  reset: "\x1b[0m", bold: "\x1b[1m", dim: "\x1b[2m", italic: "\x1b[3m",
+  brand: "\x1b[38;2;86;167;255m",   // BAG IDEA blue
+  accent: "\x1b[38;2;125;205;255m",
+  ok: "\x1b[38;2;78;222;128m",
+  warn: "\x1b[38;2;255;192;92m",
+  err: "\x1b[38;2;255;112;112m",
+  mag: "\x1b[38;2;196;148;255m",
+  gray: "\x1b[38;2;134;144;160m",
+};
+const ok = (s) => console.log(`  ${c.ok}✓${c.reset} ${s}`);
+const bad = (s) => console.log(`  ${c.err}✗${c.reset} ${s}`);
+const warn = (s) => console.log(`  ${c.warn}!${c.reset} ${s}`);
+const info = (s) => console.log(`  ${c.gray}${s}${c.reset}`);
+const rule = () => console.log(`  ${c.gray}${"─".repeat(44)}${c.reset}`);
+const head = (s) => console.log(`\n  ${c.bold}${s}${c.reset}`);
+
+function banner() {
+  console.log("");
+  console.log(`  ${c.brand}${c.bold}◍ BAG IDEA${c.reset}  ${c.gray}·${c.reset}  ${c.bold}AI Agents Office${c.reset}`);
+  console.log(`  ${c.gray}your wallpaper, at work${c.reset}`);
+}
+
 // ---- tiny http ---------------------------------------------------------------
 function req(method, p, body, asBuffer) {
   return new Promise((resolve, reject) => {
@@ -22,7 +46,7 @@ function req(method, p, body, asBuffer) {
       },
     }, (res) => {
       const chunks = [];
-      res.on("data", (c) => chunks.push(c));
+      res.on("data", (ch) => chunks.push(ch));
       res.on("end", () => {
         const buf = Buffer.concat(chunks);
         if (asBuffer) return resolve({ status: res.statusCode, buf });
@@ -41,125 +65,118 @@ async function daemonUp() {
   try { return !!(await req("GET", "/health")); } catch { return false; }
 }
 
-// ---- looks --------------------------------------------------------------------
-const C = { dim: "\x1b[90m", cyan: "\x1b[96m", green: "\x1b[92m", yellow: "\x1b[93m",
-  red: "\x1b[91m", mag: "\x1b[95m", bold: "\x1b[1m", off: "\x1b[0m" };
-const ok = (s) => console.log(`${C.green}✓${C.off} ${s}`);
-const bad = (s) => console.log(`${C.red}✗${C.off} ${s}`);
-const hr = () => console.log(C.dim + "─".repeat(46) + C.off);
-function banner() {
-  console.log(`${C.cyan}${C.bold}
-  ┌─────────────────────────────────────┐
-  │  🏢  BagIdea AI Agents Office       │
-  │      your wallpaper went to work    │
-  └─────────────────────────────────────┘${C.off}`);
+// ---- help --------------------------------------------------------------------
+function row(left, right) {
+  const pad = 22;
+  const gap = " ".repeat(Math.max(2, pad - left.length));
+  console.log(`  ${c.accent}${left}${c.reset}${gap}${c.gray}${right}${c.reset}`);
 }
+function help() {
+  banner();
+  console.log(`\n  ${c.gray}Usage${c.reset}  ${c.bold}bagidea${c.reset} ${c.gray}<command> [args]${c.reset}`);
 
-const HELP = `${C.cyan}${C.bold}🏢 bagidea${C.off} — BagIdea AI Agents Office CLI
+  head("Suite");
+  row("start", "Launch the office (if not already running)");
+  row("stop", "Shut it all down — shell · wallpaper · daemon");
+  row("status", "System overview · agents · projects");
+  row("stats", "7-day activity + cost report");
+  row("update", "Update to the latest version + restart");
 
-${C.bold}โปรแกรม${C.off}
-  ${C.cyan}start${C.off}                       เปิดออฟฟิศ (ถ้ายังไม่เปิด)
-  ${C.cyan}stop${C.off}                        ปิดทั้งชุด (shell + วอลเปเปอร์ + daemon)
-  ${C.cyan}status${C.off}                      ภาพรวมระบบ + agents + โปรเจค
-  ${C.cyan}stats${C.off}                       📊 สถิติงาน 7 วัน + ค่าใช้จ่าย
-  ${C.cyan}update${C.off}                      อัปเดตเวอร์ชันล่าสุด + รีสตาร์ท
-  ${C.cyan}version${C.off}                     เวอร์ชันปัจจุบัน
+  head("Talk to the office");
+  row('ask "<msg>"', "Order as the CEO and wait for the answer");
+  row('chat <agent> "<msg>"', "Hand a task to a specific agent");
+  row("feed", "Live event stream (Ctrl+C to exit)");
+  row('note "<msg>"', "Pin a note to the central board");
 
-${C.bold}คุยกับออฟฟิศ${C.off}
-  ${C.cyan}ask "<ข้อความ>"${C.off}              สั่งงานในนาม CEO และรอคำตอบจบ
-  ${C.cyan}chat <agent> "<msg>"${C.off}        ส่งงานให้ agent ระบุตัว (ไม่รอ)
-  ${C.cyan}feed${C.off}                        ดูเหตุการณ์สดในเทอร์มินัล (Ctrl+C ออก)
-  ${C.cyan}note "<ข้อความ>"${C.off}             แปะโน้ตบนกระดานกลาง
+  head("Team & work");
+  row("agents", "Roster — roles · voices · tools");
+  row("projects", "Projects + who is working on them");
+  row('open "<project>"', "Open a project window");
+  row("editor", "Open the 3D Office Editor");
+  row("memory <agent>", "Read an agent's memory");
+  row("office", "Read OFFICE.md (shared brief)");
 
-${C.bold}ทีมและงาน${C.off}
-  ${C.cyan}agents${C.off}                      รายชื่อพนักงาน + เสียง + เครื่องมือ
-  ${C.cyan}projects${C.off}                    รายชื่อโปรเจค + ใครกำลังทำงาน
-  ${C.cyan}open "<โปรเจค>"${C.off}              เปิดหน้าต่างโปรเจค (= ปุ่ม ▶)
-  ${C.cyan}editor${C.off}                      เปิด 3D Office Editor (จัดออฟฟิศ)
-  ${C.cyan}memory <agent>${C.off}              อ่านสมุดความจำของ agent
-  ${C.cyan}office${C.off}                      อ่าน OFFICE.md (ข้อมูลกลาง)
+  head(`AI features ${c.gray}(use the main API keys)${c.reset}`);
+  row('say "<msg>" [preset]', "Speak it with a TTS voice (default: sunny)");
+  row('image "<prompt>"', "Generate an AI image → file path");
+  row("keys", "List configured keys (values hidden)");
+  row("channels", "Telegram / Discord / LINE status");
 
-${C.bold}AI features${C.off} ${C.dim}(ใช้ main API keys)${C.off}
-  ${C.cyan}say "<ข้อความ>" [preset]${C.off}     ให้เสียง TTS พูด (default: sunny)
-  ${C.cyan}image "<prompt>"${C.off}            สร้างภาพ AI → ได้ path ไฟล์
-  ${C.cyan}keys${C.off}                        ดูรายชื่อ key ที่ตั้งไว้ (ไม่โชว์ค่า)
-  ${C.cyan}channels${C.off}                    สถานะ Telegram / Discord / LINE
-
-${C.bold}ซ่อมบำรุง${C.off}
-  ${C.cyan}fixmic${C.off}                      รีเซ็ตแผงพิมพ์ด้วยเสียงของ Windows ที่ค้าง
-  ${C.cyan}help${C.off}                        หน้านี้ (หรือ --help / -h)`;
+  head("Maintenance");
+  row("fixmic", "Reset Windows voice-typing if it's stuck");
+  row("--version, -v", "Show version");
+  row("--help, -h", "Show this screen");
+  console.log("");
+}
 
 function findShellExe() {
   const exe = path.join(ROOT, "shell", "target", "release", "bagidea-office-shell.exe");
   return fs.existsSync(exe) ? exe : null;
 }
 
+const NOT_RUNNING = () => bad(`The office isn't running — run ${c.accent}bagidea start${c.reset} first`);
+
 async function main() {
   const [cmd, ...rest] = process.argv.slice(2);
 
-  if (!cmd || ["help", "--help", "-h"].includes(cmd)) {
-    banner();
-    console.log(HELP);
-    return;
-  }
+  if (!cmd || ["help", "--help", "-h"].includes(cmd)) return help();
 
-  if (cmd === "version") {
+  if (["version", "--version", "-v"].includes(cmd)) {
     try {
       const sha = execFileSync("git", ["rev-parse", "--short", "HEAD"], { cwd: ROOT }).toString().trim();
       const date = execFileSync("git", ["log", "-1", "--format=%cd", "--date=short"], { cwd: ROOT }).toString().trim();
-      console.log(`bagidea office ${C.cyan}${sha}${C.off} (${date})`);
-    } catch { console.log("bagidea office (git not available)"); }
+      console.log(`  ${c.brand}${c.bold}BAG IDEA Office${c.reset} ${c.accent}${sha}${c.reset} ${c.gray}(${date})${c.reset}`);
+    } catch { console.log("  BAG IDEA Office (git not available)"); }
     return;
   }
 
   if (cmd === "start") {
-    if (await daemonUp()) return ok("โปรแกรมเปิดอยู่แล้ว");
+    if (await daemonUp()) return ok("The office is already running");
     const exe = findShellExe();
-    if (!exe) return bad("ไม่พบ shell exe — รัน: cargo build --release ใน shell/");
+    if (!exe) return bad(`shell exe not found — run ${c.accent}cargo build --release${c.reset} in shell/`);
     spawn(exe, [], { cwd: path.dirname(exe), detached: true, stdio: "ignore" }).unref();
-    process.stdout.write("กำลังเปิดออฟฟิศ");
+    process.stdout.write(`  ${c.gray}starting the office${c.reset}`);
     for (let i = 0; i < 30; i++) {
       await new Promise((r) => setTimeout(r, 1000));
-      process.stdout.write(".");
-      if (await daemonUp()) { console.log(""); return ok("ออฟฟิศพร้อมทำงานแล้ว 🏢"); }
+      process.stdout.write(`${c.gray}.${c.reset}`);
+      if (await daemonUp()) { console.log(""); return ok("The office is ready 🏢"); }
     }
     console.log("");
-    return console.log(`${C.yellow}!${C.off} เปิดแล้วแต่ daemon ยังไม่ตอบ — ดูที่หน้าจอ`);
+    return warn("Started, but the daemon isn't answering yet — check the screen");
   }
 
   if (cmd === "stop") {
     spawn("powershell", ["-NoProfile", "-Command",
-      "Get-CimInstance Win32_Process | Where-Object { ($_.Name -eq 'node.exe' -and $_.CommandLine -match 'server\\.js') -or $_.Name -eq 'bagidea-office-shell.exe' -or $_.Name -like 'Godot*' } | ForEach-Object { taskkill /PID $_.ProcessId /T /F } | Out-Null"],
-      { stdio: "ignore" }).on("close", () => ok("ปิดออฟฟิศแล้ว"));
+      "Get-CimInstance Win32_Process | Where-Object { ($_.Name -eq 'node.exe' -and $_.CommandLine -match 'server\\.js') -or $_.Name -eq 'bagidea-office-shell.exe' -or $_.Name -like 'Godot*' -or $_.Name -eq 'BagIdeaOffice.exe' } | ForEach-Object { taskkill /PID $_.ProcessId /T /F } | Out-Null"],
+      { stdio: "ignore" }).on("close", () => ok("The office is closed"));
     return;
   }
 
   if (cmd === "editor") {
-    if (!(await daemonUp())) return bad(`โปรแกรมยังไม่เปิด — สั่ง ${C.cyan}bagidea start${C.off} ก่อน`);
+    if (!(await daemonUp())) return NOT_RUNNING();
     await req("POST", "/editor/open", {});
-    return ok("เปิด 3D Office Editor แล้ว (หน้าต่างแยก) — จัดของเสร็จกดบันทึก");
+    return ok("Opening the 3D Office Editor (separate window) — save when you're done");
   }
 
   if (cmd === "fixmic") {
     spawn("powershell", ["-NoProfile", "-Command",
       "Get-Process TextInputHost -ErrorAction SilentlyContinue | Stop-Process -Force"],
       { stdio: "ignore" }).on("close", () =>
-      ok("รีเซ็ตแผงพิมพ์ด้วยเสียงแล้ว (Windows เปิดตัวใหม่ให้เอง)"));
+      ok("Voice-typing panel reset (Windows reopens it on its own)"));
     return;
   }
 
   if (cmd === "update") {
     const ps = path.join(ROOT, "installer", "update.ps1");
-    if (!fs.existsSync(ps)) return bad("ไม่พบ installer/update.ps1");
-    console.log("เริ่มอัปเดต… (โปรแกรมจะรีสตาร์ทเอง)");
+    if (!fs.existsSync(ps)) return bad("installer/update.ps1 not found");
+    info("Updating… (the app will restart itself)");
     spawn("powershell", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ps],
       { cwd: ROOT, detached: true, stdio: "inherit" });
     return;
   }
 
   // ---- everything below needs the daemon --------------------------------------
-  if (!(await daemonUp()))
-    return bad(`โปรแกรมยังไม่เปิด — สั่ง ${C.cyan}bagidea start${C.off} ก่อน`);
+  if (!(await daemonUp())) return NOT_RUNNING();
 
   if (cmd === "status") {
     const h = await req("GET", "/health");
@@ -167,19 +184,20 @@ async function main() {
     const reg = await req("GET", "/registry");
     const f = await req("GET", "/features");
     banner();
-    console.log(`  ${C.green}● online${C.off}  clients ${h.clients} · WT ${h.wt ? "✓" : "✗"} · perms ค้าง ${h.pendingPerms}` +
-      `  ·  keys: OpenAI ${f.openai ? "✅" : "—"} Gemini ${f.gemini ? "✅" : "—"}`);
-    hr();
+    console.log(`\n  ${c.ok}● online${c.reset}   ${c.gray}clients${c.reset} ${h.clients}   ${c.gray}worktree${c.reset} ${h.wt ? c.ok + "✓" + c.reset : c.err + "✗" + c.reset}   ${c.gray}pending perms${c.reset} ${h.pendingPerms}`);
+    console.log(`  ${c.gray}keys${c.reset}  OpenAI ${f.openai ? c.ok + "✓" + c.reset : c.gray + "—" + c.reset}   Gemini ${f.gemini ? c.ok + "✓" + c.reset : c.gray + "—" + c.reset}`);
+    head("Team");
     for (const [id, a] of Object.entries(reg.agents || {}).filter(([i]) => i !== "ceo"))
-      console.log(`  ${C.bold}${a.name}${C.off} ${C.dim}(${id} · ${a.role}${a.voice ? " · 🗣" : ""})${C.off}`);
-    hr();
-    if (!(pr.projects || []).length) console.log(`  ${C.dim}(ยังไม่มีโปรเจค)${C.off}`);
+      console.log(`  ${c.bold}${a.name}${c.reset} ${c.gray}${id} · ${a.role}${a.voice ? " · 🗣" : ""}${c.reset}`);
+    head("Projects");
+    if (!(pr.projects || []).length) info("(no projects yet)");
     for (const p of pr.projects || []) {
-      const st = p.ai ? `${C.cyan}🤖 ${(p.agents || []).join(",")} กำลังทำงาน${C.off}`
-        : p.open ? (p.visible ? `${C.green}🖥 เปิดอยู่${C.off}` : `${C.yellow}🫥 เบื้องหลัง${C.off}`)
-        : `${C.dim}ปิด${C.off}`;
-      console.log(`  📁 ${p.name} ${C.dim}${p.dir}${C.off} — ${st}`);
+      const st = p.ai ? `${c.accent}🤖 ${(p.agents || []).join(", ")} working${c.reset}`
+        : p.open ? (p.visible ? `${c.ok}🖥 open${c.reset}` : `${c.warn}🫥 background${c.reset}`)
+        : `${c.gray}closed${c.reset}`;
+      console.log(`  ${c.bold}${p.name}${c.reset} ${c.gray}${p.dir}${c.reset} — ${st}`);
     }
+    console.log("");
     return;
   }
 
@@ -187,58 +205,59 @@ async function main() {
     const s = await req("GET", "/stats");
     const today = s.days[s.days.length - 1];
     banner();
-    console.log(`  วันนี้: ${C.bold}${today.runs}${C.off} งาน  ${C.green}✓${today.done}${C.off} ${C.red}✗${today.failed}${C.off}` +
-      `  💰 $${(today.cost || 0).toFixed(2)}  ⏱ uptime ${Math.floor(s.uptimeSec / 3600)}h${Math.floor((s.uptimeSec % 3600) / 60)}m`);
-    hr();
+    console.log(`\n  ${c.bold}Today${c.reset}  ${c.bold}${today.runs}${c.reset} jobs   ${c.ok}✓ ${today.done}${c.reset}  ${c.err}✗ ${today.failed}${c.reset}   ${c.warn}$${(today.cost || 0).toFixed(2)}${c.reset}   ${c.gray}uptime ${Math.floor(s.uptimeSec / 3600)}h ${Math.floor((s.uptimeSec % 3600) / 60)}m${c.reset}`);
+    head("Last 7 days");
     const maxR = Math.max(1, ...s.days.map((d) => d.runs));
     for (const d of s.days) {
-      const bar = "█".repeat(Math.round((d.runs / maxR) * 24)) || "·";
-      console.log(`  ${d.day.slice(5)}  ${C.cyan}${bar}${C.off} ${d.runs}`);
+      const bar = "▉".repeat(Math.round((d.runs / maxR) * 22)) || c.gray + "·" + c.reset;
+      console.log(`  ${c.gray}${d.day.slice(5)}${c.reset}  ${c.brand}${bar}${c.reset} ${c.gray}${d.runs}${c.reset}`);
     }
     const ag = Object.entries(today.agents || {}).sort((a, b) => b[1] - a[1]);
     if (ag.length) {
-      hr();
-      for (const [id, n] of ag.slice(0, 6)) console.log(`  🏆 ${id}: ${n} งาน`);
+      head("Top agents today");
+      for (const [id, n] of ag.slice(0, 6)) console.log(`  ${c.accent}${id}${c.reset} ${c.gray}${n} jobs${c.reset}`);
     }
+    console.log("");
     return;
   }
 
   if (cmd === "ask") {
     const q = rest.join(" ").trim();
-    if (!q) return console.log('ใช้: bagidea ask "<ข้อความ>"');
-    console.log(`${C.dim}→ ส่งคำสั่งในนาม CEO… (Director เดินมารับ + รอคำตอบจบ)${C.off}`);
+    if (!q) return info('Usage: bagidea ask "<message>"');
+    info("→ sending as the CEO… (the Director walks over to take it, then waits for the reply)");
     const r = await req("POST", "/chat", { agent: "ceo", prompt: q, wait: true });
-    hr();
-    console.log((r && r.text) || "(ไม่มีคำตอบ)");
+    rule();
+    console.log("  " + ((r && r.text) || "(no reply)").replace(/\n/g, "\n  "));
     return;
   }
 
   if (cmd === "chat") {
     const agent = rest[0];
     const q = rest.slice(1).join(" ").trim();
-    if (!agent || !q) return console.log('ใช้: bagidea chat <agent_id> "<ข้อความ>"');
+    if (!agent || !q) return info('Usage: bagidea chat <agent_id> "<message>"');
     const r = await req("POST", "/chat", { agent, prompt: q });
-    return ok(`ส่งให้ ${agent} แล้ว (task ${r.task}) — ดูผลใน feed / หน้าโปรแกรม`);
+    return ok(`Sent to ${c.bold}${agent}${c.reset} (task ${r.task}) — watch ${c.accent}feed${c.reset} or the app window`);
   }
 
   if (cmd === "agents") {
     const reg = await req("GET", "/registry");
+    console.log("");
     for (const [id, a] of Object.entries(reg.agents || {})) {
       if (id === "ceo") continue;
-      console.log(`${C.bold}${a.name}${C.off} ${C.dim}(${id})${C.off}` +
-        `  ${a.role} · tier ${a.tier || 3}${a.voice ? ` · 🗣 ${a.voice}` : ""}`);
-      console.log(`  ${C.dim}🎯 ${(a.skills || []).length} skills · 🔧 ${(a.tools || []).join(", ") || "read-only"}${C.off}`);
+      console.log(`  ${c.bold}${a.name}${c.reset} ${c.gray}${id}${c.reset}  ${a.role} ${c.gray}· tier ${a.tier || 3}${a.voice ? ` · 🗣 ${a.voice}` : ""}${c.reset}`);
+      console.log(`  ${c.gray}🎯 ${(a.skills || []).length} skills · 🔧 ${(a.tools || []).join(", ") || "read-only"}${c.reset}\n`);
     }
     return;
   }
 
   if (cmd === "projects") {
     const pr = await req("GET", "/projects");
+    console.log("");
     for (const p of pr.projects || [])
-      console.log(`📁 ${C.bold}${p.name}${C.off} ${C.dim}${p.dir}${C.off}` +
-        `${p.ai ? ` ${C.cyan}🤖 ${(p.agents || []).join(",")}${C.off}` : ""}` +
-        `${p.open ? (p.visible ? ` ${C.green}🖥${C.off}` : ` ${C.yellow}🫥${C.off}`) : ""}`);
-    if (!(pr.projects || []).length) console.log(`${C.dim}(ยังไม่มีโปรเจค)${C.off}`);
+      console.log(`  ${c.bold}${p.name}${c.reset} ${c.gray}${p.dir}${c.reset}` +
+        `${p.ai ? ` ${c.accent}🤖 ${(p.agents || []).join(", ")}${c.reset}` : ""}` +
+        `${p.open ? (p.visible ? ` ${c.ok}🖥${c.reset}` : ` ${c.warn}🫥${c.reset}`) : ""}`);
+    if (!(pr.projects || []).length) info("(no projects yet)");
     return;
   }
 
@@ -246,23 +265,23 @@ async function main() {
     const name = rest.join(" ").trim().toLowerCase();
     const pr = await req("GET", "/projects");
     const p = (pr.projects || []).find((x) => x.name.toLowerCase() === name);
-    if (!p) return bad("ไม่พบโปรเจคชื่อนั้น — ดู: bagidea projects");
+    if (!p) return bad(`No project by that name — see ${c.accent}bagidea projects${c.reset}`);
     await req("POST", "/projects/open", { id: p.id, mode: "play" });
-    return ok(`เปิด ${p.name} แล้ว`);
+    return ok(`Opened ${c.bold}${p.name}${c.reset}`);
   }
 
   if (cmd === "note") {
     const t = rest.join(" ").trim();
-    if (!t) return console.log('ใช้: bagidea note "<ข้อความ>"');
+    if (!t) return info('Usage: bagidea note "<message>"');
     await req("POST", "/notes", { text: t });
-    return ok("แปะโน้ตแล้ว 📝");
+    return ok("Note pinned 📝");
   }
 
   if (cmd === "memory") {
     const agent = (rest[0] || "main").replace(/[^\w-]/g, "_");
     const f = path.join(ROOT, "workspace", "memory", agent + ".md");
     try { console.log(fs.readFileSync(f, "utf8")); }
-    catch { console.log(`${C.dim}(ยังไม่มีความจำของ ${agent})${C.off}`); }
+    catch { info(`(no memory for ${agent} yet)`); }
     return;
   }
 
@@ -275,47 +294,47 @@ async function main() {
   if (cmd === "keys") {
     const reg = await req("GET", "/registry");
     const f = await req("GET", "/features");
-    console.log(`MAIN: OpenAI ${f.openai ? C.green + "✅ ตั้งแล้ว" + C.off : C.yellow + "ยังไม่ตั้ง" + C.off}` +
-      ` · Gemini ${f.gemini ? C.green + "✅ ตั้งแล้ว" + C.off : C.yellow + "ยังไม่ตั้ง" + C.off}`);
+    console.log("");
+    console.log(`  ${c.bold}Main${c.reset}   OpenAI ${f.openai ? c.ok + "✓ set" + c.reset : c.warn + "not set" + c.reset}   Gemini ${f.gemini ? c.ok + "✓ set" + c.reset : c.warn + "not set" + c.reset}`);
     const extras = Object.keys(reg.apiKeys || {})
       .filter((n) => n !== "OPENAI_API_KEY" && n !== "GEMINI_API_KEY");
-    console.log("เพิ่มเติม: " + (extras.join(", ") || C.dim + "(ไม่มี)" + C.off));
+    console.log(`  ${c.bold}Extra${c.reset}  ${extras.join(", ") || c.gray + "(none)" + c.reset}`);
     return;
   }
 
   if (cmd === "channels") {
     const ch = await req("GET", "/channels/status");
+    console.log("");
     for (const [k, v] of Object.entries(ch))
-      console.log(`${k.padEnd(9)} ${v === "on" ? C.green + "● on" + C.off
-        : v === "off" ? C.dim + "○ off" + C.off : C.yellow + "● " + v + C.off}`);
+      console.log(`  ${k.padEnd(9)} ${v === "on" ? c.ok + "● on" + c.reset
+        : v === "off" ? c.gray + "○ off" + c.reset : c.warn + "● " + v + c.reset}`);
     return;
   }
 
   if (cmd === "say") {
-    const text = rest.filter((x) => !x.startsWith("--")).join(" ").trim();
-    const preset = (rest.find((x) => x.startsWith("--preset=")) || "").split("=")[1] ||
-      rest[rest.length - 1] && ["sunny","sweet","cool","genki","boyish","warm","serious","polite"].includes(rest[rest.length - 1])
-        ? rest[rest.length - 1] : "sunny";
-    const sayText = ["sunny","sweet","cool","genki","boyish","warm","serious","polite"].includes(rest[rest.length - 1])
-      ? rest.slice(0, -1).join(" ").trim() : text;
-    if (!sayText) return console.log('ใช้: bagidea say "<ข้อความ>" [preset]');
-    console.log(`${C.dim}🗣 กำลังสังเคราะห์เสียง (${preset})…${C.off}`);
+    const presets = ["sunny", "sweet", "cool", "genki", "boyish", "warm", "serious", "polite"];
+    const last = rest[rest.length - 1];
+    const preset = presets.includes(last) ? last : "sunny";
+    const sayText = (presets.includes(last) ? rest.slice(0, -1) : rest)
+      .filter((x) => !x.startsWith("--")).join(" ").trim();
+    if (!sayText) return info('Usage: bagidea say "<message>" [preset]');
+    info(`🗣 synthesizing voice (${preset})…`);
     const r = await req("POST", "/tts", { preset, text: sayText }, true);
     if (r.status !== 200) return bad(r.buf.toString("utf8"));
     const wav = path.join(require("os").tmpdir(), "bagidea_say.wav");
     fs.writeFileSync(wav, r.buf);
     spawn("powershell", ["-NoProfile", "-Command",
       `(New-Object Media.SoundPlayer '${wav}').PlaySync()`], { stdio: "ignore" })
-      .on("close", () => ok("พูดจบแล้ว"));
+      .on("close", () => ok("Done speaking"));
     return;
   }
 
   if (cmd === "image") {
     const prompt = rest.join(" ").trim();
-    if (!prompt) return console.log('ใช้: bagidea image "<prompt>"');
-    console.log(`${C.dim}🖼 กำลังสร้างภาพ… (อาจใช้เวลาครู่ใหญ่)${C.off}`);
+    if (!prompt) return info('Usage: bagidea image "<prompt>"');
+    info("🖼 generating image… (this can take a moment)");
     const r = await req("POST", "/gen/image", { prompt });
-    if (r && r.path) return ok(`ได้ภาพแล้ว → ${r.path}`);
+    if (r && r.path) return ok(`Image ready → ${c.accent}${r.path}${c.reset}`);
     return bad(String(r));
   }
 
@@ -323,7 +342,7 @@ async function main() {
     const J = path.join(ROOT, "daemon", "journal.jsonl");
     let pos = 0;
     try { pos = fs.statSync(J).size; } catch {}
-    console.log(`${C.dim}📡 ดูเหตุการณ์สด… (Ctrl+C ออก)${C.off}`);
+    info("📡 live events… (Ctrl+C to exit)");
     setInterval(() => {
       let size = 0;
       try { size = fs.statSync(J).size; } catch { return; }
@@ -338,27 +357,28 @@ async function main() {
         let e;
         try { e = JSON.parse(line); } catch { continue; }
         const t = new Date(e.ts).toLocaleTimeString();
+        const ts = `${c.gray}${t}${c.reset}`;
         if (e.type === "chat.message")
-          console.log(`${C.dim}${t}${C.off} ${C.cyan}${e.sub || e.agent}${C.off}: ${String(e.text).split("\n")[0].slice(0, 110)}`);
+          console.log(`${ts} ${c.accent}${e.sub || e.agent}${c.reset}: ${String(e.text).split("\n")[0].slice(0, 110)}`);
         else if (e.type === "task.started")
-          console.log(`${C.dim}${t}${C.off} ${C.green}▶${C.off} ${e.agent}: ${e.title || ""}`);
-        else if (e.type === "task.completed") console.log(`${C.dim}${t} ✓ ${e.agent} เสร็จ${C.off}`);
-        else if (e.type === "task.failed") console.log(`${C.dim}${t}${C.off} ${C.red}✗ ${e.agent} ล้มเหลว${C.off}`);
+          console.log(`${ts} ${c.ok}▶${c.reset} ${e.agent}: ${e.title || ""}`);
+        else if (e.type === "task.completed") console.log(`${ts} ${c.ok}✓ ${e.agent} done${c.reset}`);
+        else if (e.type === "task.failed") console.log(`${ts} ${c.err}✗ ${e.agent} failed${c.reset}`);
         else if (e.type === "perm.requested")
-          console.log(`${C.dim}${t}${C.off} ${C.yellow}🛡 ${e.agent} ขอใช้ ${e.tool} — กด allow ในหน้าโปรแกรม${C.off}`);
-        else if (e.type === "task.delegated") console.log(`${C.dim}${t}${C.off} 📋 main → ${e.target}`);
+          console.log(`${ts} ${c.warn}🛡 ${e.agent} wants ${e.tool} — click allow in the app${c.reset}`);
+        else if (e.type === "task.delegated") console.log(`${ts} 📋 main → ${e.target}`);
         else if (e.type === "channel.message")
-          console.log(`${C.dim}${t}${C.off} 📨 [${e.channel}] ${e.from}: ${e.text}`);
+          console.log(`${ts} 📨 [${e.channel}] ${e.from}: ${e.text}`);
         else if (e.type === "voice.say")
-          console.log(`${C.dim}${t}${C.off} ${C.mag}🗣 ${e.agent}: ${e.text}${C.off}`);
+          console.log(`${ts} ${c.mag}🗣 ${e.agent}: ${e.text}${c.reset}`);
         else if (e.type === "proposal.created")
-          console.log(`${C.dim}${t}${C.off} ${C.yellow}💡 ข้อเสนอใหม่: ${e.name}${C.off}`);
+          console.log(`${ts} ${c.warn}💡 new proposal: ${e.name}${c.reset}`);
       }
     }, 800);
     return;
   }
 
-  console.log(`ไม่รู้จักคำสั่ง "${cmd}" — ดู: ${C.cyan}bagidea help${C.off}`);
+  bad(`Unknown command "${cmd}" — see ${c.accent}bagidea --help${c.reset}`);
 }
 
-main().catch((e) => { console.error(`${C.red}✗${C.off} ${e.message}`); process.exit(1); });
+main().catch((e) => { console.error(`  ${c.err}✗${c.reset} ${e.message}`); process.exit(1); });
