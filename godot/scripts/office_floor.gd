@@ -226,14 +226,14 @@ func _apply_daylight() -> void:
 func _capture_map() -> void:
 	await get_tree().create_timer(4.0).timeout  # world + runtime assets ready
 	var vp := SubViewport.new()
-	vp.size = Vector2i(800, 700)
+	vp.size = Vector2i(768, 768)   # square — matches the square room grid
 	vp.render_target_update_mode = SubViewport.UPDATE_ONCE
 	add_child(vp)
 	var cam := Camera3D.new()
 	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
-	cam.size = 25.0
+	cam.size = 26.0                # fits the 24×24 grid (origin-centred) with margin
 	cam.cull_mask = 1  # world only — characters live on render layer 2
-	cam.position = Vector3(3, 40, 1.5)
+	cam.position = Vector3(0, 40, 0)
 	cam.rotation_degrees = Vector3(-90, 0, 0)
 	vp.add_child(cam)
 	cam.current = true

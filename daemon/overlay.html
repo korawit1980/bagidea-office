@@ -364,7 +364,7 @@
   .edchip.on { border-color: var(--accent); color: var(--accent); background: rgba(94,200,255,0.12); }
   /* aspect matches the map capture (28.57 wide × 25 deep) so the room image
      fills the grid exactly 1:1 and placed items line up with real rooms. */
-  .edgrid { position: relative; width: 100%; aspect-ratio: 28.57 / 25;
+  .edgrid { position: relative; width: 100%; aspect-ratio: 1 / 1;
     max-height: 56vh; border-radius: 10px;
     background-color: #0a1018; background-size: 100% 100%; background-repeat: no-repeat;
     border: 1px solid var(--line); overflow: hidden; cursor: crosshair; }
@@ -2609,7 +2609,7 @@
   // base world, so atmosphere + effects are never touched.
   // Match the live-map capture extents EXACTLY so placed items line up with
   // the room image behind the grid.
-  const EDMAP = { x0: -11.29, x1: -11.29 + 28.57, z0: -11.0, z1: 14.0 };
+  const EDMAP = { x0: -13.0, x1: 13.0, z0: -13.0, z1: 13.0 };
   const ED_ITEMS = [
     ["desk", "🪑 โต๊ะทำงาน"], ["table", "🍽 โต๊ะกลม"], ["chair", "💺 เก้าอี้"],
     ["shelf", "📚 ชั้นวาง"], ["plant", "🪴 ต้นไม้"], ["lamp", "💡 โคมไฟ"],
@@ -3449,7 +3449,7 @@
 
   // ---- top-down map ---------------------------------------------------------
   // World→map transform; must match the ortho render in office_floor.gd.
-  const MAP = { x0: -11.29, w: 28.57, z0: -11.0, d: 25.0 };
+  const MAP = { x0: -13.0, w: 26.0, z0: -13.0, d: 26.0 };
   let mapOpen = false, lastPos = [];
   document.getElementById("mapBtn").onclick = () => openMap();
 
