@@ -45,7 +45,7 @@ const ROOM_DEFS := {
 # central plus-corridor that links the four door gaps stays clear — agents and
 # the swap never drop furniture in a doorway. (cell is 10.5 x 8 → half 5.25 x 4)
 const ROOM_ANCHORS := {
-	"exec":  {"exec_c": Vector2(0, 0), "ceo_desk": Vector2(-3.0, -1.1), "lead_desk": Vector2(3.0, -2.5),
+	"exec":  {"exec_c": Vector2(0, 0), "ceo_desk": Vector2(-2.6, -3.0), "lead_desk": Vector2(3.0, -2.5),
 		"pace_a": Vector2(-3.0, 2.4), "pace_b": Vector2(3.0, 2.4)},
 	"ops":   {"ops_c": Vector2(0, 0), "desk1": Vector2(-4.0, -2.5), "desk2": Vector2(-2.0, -2.5),
 		"desk3": Vector2(2.0, -2.5), "desk4": Vector2(4.0, -2.5), "desk5": Vector2(-2.5, 2.4),
@@ -342,20 +342,27 @@ func _furnish(room: Node3D, kind: String, accent: String) -> void:
 	var sw := Vector3(-3.0, 0, 2.4); var se := Vector3(3.0, 0, 2.4)
 	match kind:
 		"exec":
-			# CEO desk pulled forward off the back wall so there's a walkway
-			# behind it; Director desk (NE); orrery + plant in front corners
-			var ceo_p := Vector3(-3.0, 0, -1.9)
-			_desk_pod(room, ceo_p, 180.0, kit)
-			if kit: _kit(room, "Command_Console", ceo_p + Vector3(0, 0, -0.5), 0.0, 0.5)
+			# CEO sits at the BACK of the room facing the office front (+Z): the
+			# command console is the desk (its screen faces the floor), and the
+			# chair sits behind it so the CEO oversees the room. Director desk (NE);
+			# orrery in a front corner.
+			var ceo_p := Vector3(-2.6, 0, -1.6)
+			if kit:
+				# the command console IS the desk — its open side + screens face the
+				# room (+Z). The CEO chair sits behind the console's back, facing the
+				# room front (+Z), so the CEO oversees the floor.
+				_kit(room, "Command_Console", ceo_p, 0.0, 0.5)
+				_kit(room, "Chair_1", ceo_p + Vector3(0, 0, -1.4), 0.0, 0.62)
+			else:
+				room.add_child(_box(ceo_p + Vector3(0, 0.4, 0), Vector3(1.7, 0.8, 0.7), _m("23303f", 0.5)))
 			_desk_pod(room, ne, 180.0, kit)
 			if kit:
 				_kit(room, "Orrery", sw, 0.0, 0.35)
-				_kit(room, "Plant_1", se, 40.0, 1.4)
 		"ops":
 			# six desk pods on the six ops anchors (back row of 4, front pair)
 			for sp in [Vector3(-4.0, 0, -2.5), Vector3(-2.0, 0, -2.5), Vector3(2.0, 0, -2.5),
 					Vector3(4.0, 0, -2.5), Vector3(-2.5, 0, 2.4), Vector3(2.5, 0, 2.4)]:
-				_desk_pod(room, sp, 180.0 if sp.z < 0 else 0.0, kit)
+				_desk_pod(room, sp, 180.0, kit)   # all face the front (+Z), like the CEO
 		"server":
 			# racks down both side walls (clear of the side doors at z=0), a glowing
 			# data core the server-agent tends, generators in a front corner
@@ -371,8 +378,10 @@ func _furnish(room: Node3D, kind: String, accent: String) -> void:
 			# central table is the gather point (not a doorway) — seats in quadrants
 			if kit:
 				_kit(room, "Octo_Table", Vector3(0, 0, 0), 0.0, 0.5)
-				_kit(room, "Chair_1", nw, 135.0, 0.6); _kit(room, "Chair_1", ne, -135.0, 0.6)
-				_kit(room, "Chair_1", sw, 45.0, 0.6); _kit(room, "Chair_1", se, -45.0, 0.6)
+				# Chair_1 faces +Z at 0°; angle each corner seat to look at the centre
+				# table: roty = atan2(dx, dz) toward (0,0).
+				_kit(room, "Chair_1", nw, 50.0, 0.6); _kit(room, "Chair_1", ne, -50.0, 0.6)
+				_kit(room, "Chair_1", sw, 129.0, 0.6); _kit(room, "Chair_1", se, -129.0, 0.6)
 			else:
 				room.add_child(_box(Vector3(0, 0.4, 0), Vector3(2.0, 0.8, 2.0), _m("241d30", 0.5)))
 		"cafe":
@@ -386,7 +395,7 @@ func _furnish(room: Node3D, kind: String, accent: String) -> void:
 					room.add_child(_box(tp + Vector3(0, 0.4, 0), Vector3(1.0, 0.8, 1.0), _m("3a2a18", 0.5)))
 		"dorm":
 			_bunk(room, nw, "Blue", kit); _bunk(room, ne, "Red", kit)
-			if kit: _kit(room, "Plant_1", se, 120.0, 1.5)
+			# (no plant — kept out of the office per design)
 		"dormx":
 			# six bunks on the six dormx anchors
 			var cols := ["Blue", "Green", "Orange", "Purple", "Red", "Grey"]
@@ -399,7 +408,6 @@ func _furnish(room: Node3D, kind: String, accent: String) -> void:
 				_kit(room, "Cafeteria_Table", se, 0.0, 0.8)
 				_kit(room, "3D_Chess_Board", se + Vector3(0, 0.62, 0), 15.0, 0.35)
 				_kit(room, "Hydroponics_Full", ne, 0.0, 0.8)
-				_kit(room, "Plant_1", sw, 60.0, 1.5)
 			else:
 				room.add_child(_box(nw + Vector3(0, 0.6, 0), Vector3(0.2, 1.2, 1.6), _m("101418", 0.3)))
 		"lobby":

@@ -134,6 +134,24 @@ func _resnap_agents() -> void:
 	var am := get_parent().get_node_or_null("AgentManager")
 	if am and am.has_method("resnap_agents"):
 		am.resnap_agents()
+	_reposition_rec_life()
+
+## Keep the ambient life with its room: the cat + football follow the RECREATION
+## cell, the dogs follow the CAFETERIA cell. Re-centres them on every swap.
+func _reposition_rec_life() -> void:
+	if _grid == null: return
+	var rec_slot: int = _grid.room_order.find("rec")
+	if rec_slot >= 0:
+		var rc: Vector3 = _grid.slot_center(rec_slot)
+		if is_instance_valid(pet) and pet.has_method("set_home"): pet.set_home(rc)
+		if is_instance_valid(ball) and ball.has_method("set_home"): ball.set_home(rc)
+	var cafe_slot: int = _grid.room_order.find("cafe")
+	if cafe_slot >= 0:
+		var cc: Vector3 = _grid.slot_center(cafe_slot)
+		for i in _dogs.size():
+			var d = _dogs[i]
+			if is_instance_valid(d) and d.has_method("set_home"):
+				d.set_home(cc + Vector3(-1.2 + i * 2.4, 0, 0.4))
 
 ## Current room kind per slot (for the editor UI + saving to layout.json).
 func get_room_order() -> Array:
@@ -194,6 +212,7 @@ var sky_mat: StandardMaterial3D
 var beam_mats: Array[ShaderMaterial] = []
 var pet: Sprite3D        # the office cat (or fallback dog) — agents play with it
 var ball: CSGSphere3D    # the rec football
+var _dogs: Array = []    # cafe dogs (gimmick) — follow the cafe room on swap
 var _tv_glow: Node3D     # screen glow + light, on while someone watches
 var _tv_dark: MeshInstance3D  # matte panel covering the screen when OFF
 var _lamp_lights: Array[OmniLight3D] = []      # garden lamps — night only
@@ -1185,7 +1204,16 @@ func _build_geometry() -> void:
 	_ballg.albedo_texture = _soccer_texture(); _ballg.roughness = 0.35
 	ball.material = _ballg; ball.set_script(load("res://scripts/rec_ball.gd"))
 	add_child(ball); ball.position = Vector3(-7, 0.2, 8)
+	# cafe life: a couple of dogs hang out (gimmick like the cat) — they follow
+	# the cafe room when it's swapped.
+	var _dogg := load("res://scripts/dog_sprite.gd")
+	for i in 2:
+		var dog := Sprite3D.new()
+		dog.set_script(_dogg); dog.position = Vector3(-1.2 + i * 2.4, 0.27, 0.5)
+		add_child(dog); _dogs.append(dog)
 	_build_tv_glow()
+	# drop the cat / ball / dogs onto their rooms' current slots
+	_reposition_rec_life()
 	return
 	# ── legacy hand-built floor below — unreachable, kept for reference ──────
 	var wall := _mat(Color(0.18, 0.18, 0.25), 0.9)

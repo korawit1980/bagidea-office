@@ -5,10 +5,20 @@ extends Sprite3D
 ## when the pack is missing, so clones still run.
 
 const DIR := "res://assets/characters/cat/Sprites/"
-## Wander area (the recreation room — same range the dog used).
-const ROAM := Rect2(-9.2, 6.8, 11.4, 5.6)
+## Wander HALF-extents around _home (the recreation room cell). _home is set by
+## world_builder and re-set whenever rooms swap, so the cat follows its room.
+const HX := 4.3
+const HZ := 2.7
+var _home := Vector2(-10.5, 8.0)
 const SPEED := 1.1
 const RUN_SPEED := 2.7
+
+## Re-centre the cat's roam area on a new room cell (called on room swap).
+func set_home(c: Vector3) -> void:
+	_home = Vector2(c.x, c.z)
+	if _tween: _tween.kill()
+	_moving = false
+	position = Vector3(c.x, position.y, c.z)
 
 static func has_assets() -> bool:
 	return FileAccess.file_exists(ProjectSettings.globalize_path(DIR + "IDLE.png"))
@@ -53,9 +63,9 @@ func _roam_loop() -> void:
 		if Time.get_ticks_msec() / 1000.0 < _busy_until:
 			continue
 		var target := Vector3(
-			randf_range(ROAM.position.x, ROAM.position.x + ROAM.size.x),
+			_home.x + randf_range(-HX, HX),
 			position.y,
-			randf_range(ROAM.position.y, ROAM.position.y + ROAM.size.y))
+			_home.y + randf_range(-HZ, HZ))
 		_move_to(target, SPEED, "walk")
 
 func _move_to(target: Vector3, speed: float, anim: String) -> void:

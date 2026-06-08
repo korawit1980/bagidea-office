@@ -27,9 +27,19 @@ const TROT_B: Array[String] = [
 	"..............",
 ]
 
-## Wander area (the recreation room).
-const ROAM := Rect2(-9.2, 6.8, 11.4, 5.6)  # x, z, w, d
+## Wander HALF-extents around _home. _home is set by world_builder (the cafe or
+## rec cell) and re-set on room swap, so the dog follows its room.
+const HX := 4.0
+const HZ := 2.6
+var _home := Vector2(0.0, 0.0)
 const SPEED := 1.3
+
+## Re-centre the dog's roam area on a new room cell (called on room swap).
+func set_home(c: Vector3) -> void:
+	_home = Vector2(c.x, c.z)
+	if _tween: _tween.kill()
+	_moving = false
+	position = Vector3(c.x, position.y, c.z)
 
 var _tex_a: ImageTexture
 var _tex_b: ImageTexture
@@ -71,9 +81,9 @@ func _roam_loop() -> void:
 		if not is_inside_tree():
 			return
 		var target := Vector3(
-			randf_range(ROAM.position.x, ROAM.position.x + ROAM.size.x),
+			_home.x + randf_range(-HX, HX),
 			position.y,
-			randf_range(ROAM.position.y, ROAM.position.y + ROAM.size.y))
+			_home.y + randf_range(-HZ, HZ))
 		flip_h = target.x < position.x  # art faces right
 		var dur := position.distance_to(target) / SPEED
 		_moving = true
