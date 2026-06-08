@@ -1,5 +1,7 @@
 # bagidea CLI — คุมออฟฟิศจากเทอร์มินัล
 
+![bagidea --help](../img/cli.png)
+
 ตัวติดตั้งผูกคำสั่ง `bagidea` เข้า PATH ให้แล้ว (ติดตั้งเอง: ใช้ `bagidea.cmd`
 ที่ root ของ repo หรือเพิ่มโฟลเดอร์ repo เข้า PATH)
 

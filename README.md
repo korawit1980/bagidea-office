@@ -7,11 +7,18 @@ Not a dashboard. Not a chat window. A **world** that renders the true state of y
 
 🌐 **Website:** the landing page + browsable docs live in [`web/`](web/) (deployable to any static host).
 
-![The office at night — glowing screens, the team at work, the brand billboard lit](docs/img/world.png)
-*Captured live from the wallpaper at night: the CEO (with an equipped aura), the Director (Shino) and staff at their desks, monitors glowing, the brand billboard lit, fireflies in the countryside — desktop icons render on top. A real wallpaper.*
+![The office at golden hour — the whole floor, the team at work, the Ghost Deck and server room glowing](docs/img/world.png)
+*Captured live: the full office floor at golden hour — the CEO, the Director (Shino) and staff at their desks, the floating Ghost Deck (top-right), the server room glowing, the brand billboard and roofline clock, the office cat wandering. The day/night cycle follows your real local time.*
 
-![The same office on the day shift](docs/img/day.png)
-*…and the day shift: the local-time day/night cycle drives the sun, sky, lighting and reflections in real time.*
+**It's a real wallpaper — running behind your desktop icons, with a live activity feed:**
+
+![The office as a live desktop wallpaper at night, with the feed panel and desktop icons on top](docs/img/desktop.png)
+
+| 💬 Talk to the office (CEO seat) | 🎨 Rearrange it in the 3D Editor |
+|---|---|
+| ![Chat panel focused on the CEO](docs/img/overlay.png) | ![The 3D Office Editor](docs/img/editor.png) |
+| 👥 Agents at their desks, auras lit | ⌨️ The `bagidea` CLI |
+| ![Agents working at their desks](docs/img/agents.png) | ![The bagidea CLI help](docs/img/cli.png) |
 
 > ✅ **Status: working product (Windows 11).** The full pipeline works end-to-end: wallpaper → daemon → real Claude Code sessions working *inside real project folders* → spatialized approvals → agent management UI → Telegram/Discord/LINE channels → CLI → self-updater. Some art packs are not bundled (licenses — see [Art assets](#art-assets)); the game falls back to procedural placeholders without them.
 
