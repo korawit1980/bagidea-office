@@ -165,11 +165,12 @@
 
 <section id="install"><div class="wrap">
   <div class="install reveal">
-    <h2 class="title" style="font-size:28px">Install in one line</h2>
-    <p class="lead">Windows 11 · the installer sets up every dependency for you.</p>
-    <code class="code">irm https://raw.githubusercontent.com/bagidea/bagidea-ai-agents-office/main/installer/install.ps1 | iex</code>
+    <h2 class="title" style="font-size:28px">Get the installer</h2>
+    <p class="lead">Windows 11 · a private beta — request access and you'll get the installer + release.</p>
+    <code class="code"># With the release you receive:
+.\install.ps1 -Zip .\BagIdeaOffice-latest.zip</code>
     <div class="steps">
-      <div><b>1.</b> Run the one-liner in PowerShell — it installs Git, Node, Rust, Godot &amp; the Claude CLI</div>
+      <div><b>1.</b> Run <b>install.ps1</b> — it sets up Node, Godot &amp; the Claude CLI (the app is prebuilt, no compiler needed)</div>
       <div><b>2.</b> Run <b>claude</b> once to log in</div>
       <div><b>3.</b> <b>bagidea start</b> — your wallpaper goes to work 🏢</div>
     </div>

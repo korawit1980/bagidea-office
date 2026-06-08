@@ -56,10 +56,8 @@
   <aside id="side"><h4>GUIDES</h4></aside>
   <main id="doc"><p id="loading">Loading…</p></main>
 </div>
+<script src="guides.js"></script>
 <script>
-  // Guides ship WITH the site (web/guides/) so docs work on any host and
-  // offline — no dependency on the (private) source repo.
-  const RAW = "guides/";
   const GUIDES = [
     ["getting-started", "🚀 Getting started"],
     ["agents", "🤖 Agents & skills"],
@@ -110,16 +108,15 @@
     const a = document.createElement("a"); a.textContent = label; a.href = "#" + id;
     a.onclick = () => load(id); side.appendChild(a);
   });
-  async function load(id) {
+  function load(id) {
     document.querySelectorAll("#side a").forEach((a) => a.classList.toggle("on", a.getAttribute("href") === "#" + id));
     const doc = document.getElementById("doc");
     doc.innerHTML = '<p id="loading">Loading…</p>';
-    try {
-      const r = await fetch(RAW + id + ".md");
-      if (!r.ok) throw new Error(r.status);
-      doc.innerHTML = md(await r.text());
-      window.scrollTo(0, 0);
-    } catch { doc.innerHTML = "<p>Could not load this guide.</p>"; }
+    // Content is inlined (guides.js) so docs work on any host AND offline /
+    // file:// — no fetch, no CORS, no dependency on the (private) repo.
+    const txt = (window.GUIDES_CONTENT || {})[id];
+    if (txt) { doc.innerHTML = md(txt); window.scrollTo(0, 0); }
+    else doc.innerHTML = "<p>Guide not found.</p>";
   }
   load((location.hash || "#getting-started").slice(1));
 </script>

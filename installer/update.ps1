@@ -1,4 +1,7 @@
-﻿# BagIdea Office updater — pull the latest, rebuild what changed, relaunch.
+﻿# BagIdea Office updater. Two modes, auto-detected:
+#   • DEV checkout (.git present)  → git pull + rebuild shell if changed
+#   • Installed build (no .git)    → re-run install.ps1 with the latest zip
+#     (BAGIDEA_RELEASE_URL); user data is preserved by the installer.
 # Run via:  bagidea update  |  the in-app 🔄 button  |  directly.
 $ErrorActionPreference = "Continue"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -16,7 +19,16 @@ Get-CimInstance Win32_Process | Where-Object {
 } | ForEach-Object { taskkill /PID $_.ProcessId /T /F 2>$null | Out-Null }
 Start-Sleep 2
 
-# 2) Pull the latest code.
+# Installed build (no git): pull a fresh release zip and re-install over it.
+if (-not (Test-Path (Join-Path $root ".git"))) {
+  $url = $env:BAGIDEA_RELEASE_URL
+  if (-not $url) { Write-Host "  ! ไม่พบ BAGIDEA_RELEASE_URL — ตั้งค่า URL ของ release zip ก่อน" -ForegroundColor Yellow; exit 1 }
+  Write-Host "  [2/2] อัปเดตจาก release ล่าสุด..." -ForegroundColor DarkCyan
+  & (Join-Path $PSScriptRoot "install.ps1") -Zip $url
+  exit 0
+}
+
+# 2) DEV: pull the latest code.
 Write-Host "  [2/4] ดึงโค้ดล่าสุด..." -ForegroundColor DarkCyan
 $before = git rev-parse HEAD
 git pull --ff-only

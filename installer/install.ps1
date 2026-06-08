@@ -1,121 +1,124 @@
-﻿# BagIdea AI Agents Office — one-shot installer.
-# Installs every dependency, clones the app, builds it, wires the CLI, and
-# launches the office. Safe to re-run (each step skips what already exists).
+﻿# BagIdea AI Agents Office — installer (closed-source friendly).
+# Installs from a RELEASE ZIP — no source repo access, no Rust build needed
+# (the shell binary is bundled). Get the zip from a URL you control or a
+# local file; the office app + deps land in %LOCALAPPDATA%\BagIdeaOffice.
 #
-#   irm https://raw.githubusercontent.com/bagidea/bagidea-ai-agents-office/main/installer/install.ps1 | iex
-#   (or run this file directly)
+#   # from a hosted zip:
+#   $env:BAGIDEA_RELEASE_URL = "https://your-host/BagIdeaOffice-latest.zip"
+#   irm https://your-host/install.ps1 | iex
+#
+#   # from a local zip the owner sent you:
+#   .\install.ps1 -Zip .\BagIdeaOffice-latest.zip
+param([string]$Zip = $env:BAGIDEA_RELEASE_URL)
 $ErrorActionPreference = "Continue"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-$APPDIR  = Join-Path $env:LOCALAPPDATA "BagIdeaOffice"
-$REPO    = "https://github.com/bagidea/bagidea-ai-agents-office.git"
-$GODOTV  = "4.6.3"
-$GODOTZ  = "Godot_v$GODOTV-stable_win64.exe.zip"
-$GODOTURL= "https://github.com/godotengine/godot/releases/download/$GODOTV-stable/$GODOTZ"
+$APPDIR = Join-Path $env:LOCALAPPDATA "BagIdeaOffice"
+$APP    = Join-Path $APPDIR "app"
+$GODOTV = "4.6.3"
 
-function Step($n, $msg) { Write-Host ""; Write-Host "  [$n] $msg" -ForegroundColor Cyan }
-function Ok($msg)  { Write-Host "      + $msg" -ForegroundColor Green }
-function Skip($msg){ Write-Host "      - $msg" -ForegroundColor DarkGray }
-function Warn($msg){ Write-Host "      ! $msg" -ForegroundColor Yellow }
+function Step($n, $m) { Write-Host ""; Write-Host "  [$n] $m" -ForegroundColor Cyan }
+function Ok($m)   { Write-Host "      + $m" -ForegroundColor Green }
+function Skip($m) { Write-Host "      - $m" -ForegroundColor DarkGray }
+function Warn($m) { Write-Host "      ! $m" -ForegroundColor Yellow }
 
 Write-Host ""
-Write-Host "  ============================================" -ForegroundColor Cyan
-Write-Host "   BagIdea AI Agents Office - INSTALLER" -ForegroundColor Cyan
-Write-Host "  ============================================" -ForegroundColor Cyan
+Write-Host "  ===========================================" -ForegroundColor Cyan
+Write-Host "   BagIdea AI Agents Office — INSTALLER" -ForegroundColor Cyan
+Write-Host "  ===========================================" -ForegroundColor Cyan
 
-# ---- 0) winget --------------------------------------------------------------
-if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
-  Warn "ไม่พบ winget - ติดตั้ง 'App Installer' จาก Microsoft Store ก่อน แล้วรันใหม่"
+if (-not $Zip) {
+  Warn "ไม่พบ release zip — ระบุด้วย -Zip <path|url> หรือตั้ง `$env:BAGIDEA_RELEASE_URL"
+  Warn "ขอไฟล์ติดตั้งจากผู้พัฒนา (โปรเจคนี้เป็น private)"
   exit 1
 }
+if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+  Warn "ไม่พบ winget — ติดตั้ง 'App Installer' จาก Microsoft Store ก่อน"; exit 1
+}
 
-# ---- 1) Git -------------------------------------------------------------------
-Step 1 "Git"
-if (Get-Command git -ErrorAction SilentlyContinue) { Skip "มีอยู่แล้ว" }
-else { winget install --id Git.Git -e --silent --accept-package-agreements --accept-source-agreements; Ok "ติดตั้งแล้ว (เปิดเทอร์มินัลใหม่ถ้า git ยังไม่เจอ)" }
-
-# ---- 2) Node.js ---------------------------------------------------------------
-Step 2 "Node.js LTS"
+# ---- deps (no Rust — the shell binary ships in the zip) ----------------------
+Step 1 "Node.js LTS"
 if (Get-Command node -ErrorAction SilentlyContinue) { Skip "มีอยู่แล้ว ($(node --version))" }
 else { winget install --id OpenJS.NodeJS.LTS -e --silent --accept-package-agreements --accept-source-agreements; Ok "ติดตั้งแล้ว" }
 
-# ---- 3) Claude Code CLI --------------------------------------------------------
-Step 3 "Claude Code CLI (สมองของ agents)"
+Step 2 "Claude Code CLI (สมองของ agents)"
 if (Get-Command claude -ErrorAction SilentlyContinue) { Skip "มีอยู่แล้ว" }
-else {
-  npm install -g @anthropic-ai/claude-code
-  Ok "ติดตั้งแล้ว - อย่าลืม login ครั้งแรกด้วยคำสั่ง: claude"
-}
+else { npm install -g @anthropic-ai/claude-code; Ok "ติดตั้งแล้ว — login ครั้งแรกด้วยคำสั่ง: claude" }
 
-# ---- 4) Rust (สำหรับคอมไพล์ shell) ----------------------------------------------
-Step 4 "Rust toolchain"
-if (Get-Command cargo -ErrorAction SilentlyContinue) { Skip "มีอยู่แล้ว" }
-else { winget install --id Rustlang.Rustup -e --silent --accept-package-agreements --accept-source-agreements; Ok "ติดตั้งแล้ว" }
-
-# ---- 5) Godot engine ------------------------------------------------------------
-Step 5 "Godot $GODOTV (ตัว render โลกออฟฟิศ)"
+Step 3 "Godot $GODOTV (ตัว render โลกออฟฟิศ)"
 $gdir = Join-Path $APPDIR "tools\godot"
 $gexe = Join-Path $gdir "Godot_v$GODOTV-stable_win64.exe"
 if (Test-Path $gexe) { Skip "มีอยู่แล้ว" }
 else {
   New-Item -ItemType Directory -Force $gdir | Out-Null
-  $zip = Join-Path $env:TEMP $GODOTZ
-  Write-Host "      ดาวน์โหลด Godot..." -ForegroundColor DarkGray
-  Invoke-WebRequest -Uri $GODOTURL -OutFile $zip
-  Expand-Archive -Path $zip -DestinationPath $gdir -Force
-  Remove-Item $zip -Force
-  if (Test-Path $gexe) { Ok "ติดตั้งแล้ว" } else { Warn "แตก zip แล้วไม่พบ exe - เช็คโฟลเดอร์ $gdir" }
+  $z = Join-Path $env:TEMP "godot.zip"
+  Invoke-WebRequest -Uri "https://github.com/godotengine/godot/releases/download/$GODOTV-stable/Godot_v$GODOTV-stable_win64.exe.zip" -OutFile $z
+  Expand-Archive -Path $z -DestinationPath $gdir -Force; Remove-Item $z
+  if (Test-Path $gexe) { Ok "ติดตั้งแล้ว" } else { Warn "แตก zip แล้วไม่พบ exe" }
 }
 [Environment]::SetEnvironmentVariable("BAGIDEA_GODOT", $gexe, "User")
-$env:BAGIDEA_GODOT = $gexe
 
-# ---- 6) ตัวโปรแกรม -----------------------------------------------------------------
-Step 6 "BagIdea Office (clone / update)"
-$app = Join-Path $APPDIR "app"
-if (Test-Path (Join-Path $app ".git")) {
-  Push-Location $app; git pull --ff-only; Pop-Location; Ok "อัปเดตโค้ดแล้ว"
-} else {
-  New-Item -ItemType Directory -Force $APPDIR | Out-Null
-  git clone $REPO $app
-  if (Test-Path $app) { Ok "clone แล้ว -> $app" } else { Warn "clone ไม่สำเร็จ"; exit 1 }
+# ---- the app (from the release zip) ------------------------------------------
+Step 4 "ติดตั้งตัวโปรแกรม (จาก release zip)"
+$tmp = Join-Path $env:TEMP "bagidea_dl.zip"
+if ($Zip -match '^https?://') {
+  Write-Host "      ดาวน์โหลด..." -ForegroundColor DarkGray
+  Invoke-WebRequest -Uri $Zip -OutFile $tmp; $src = $tmp
+} elseif (Test-Path $Zip) { $src = (Resolve-Path $Zip).Path }
+else { Warn "ไม่พบไฟล์ zip: $Zip"; exit 1 }
+
+# Preserve user data across re-installs (registry/sessions/projects/keys/etc).
+$backup = Join-Path $env:TEMP "bagidea_userdata"
+if (Test-Path $APP) {
+  if (Test-Path $backup) { Remove-Item -Recurse -Force $backup }
+  New-Item -ItemType Directory -Force $backup | Out-Null
+  foreach ($f in @("daemon\registry.json","daemon\sessions.json","daemon\projects.json",
+      "daemon\jobs.json","daemon\calendar.json","daemon\notes.json","daemon\layout.json","daemon\stats.json")) {
+    $p = Join-Path $APP $f; if (Test-Path $p) { Copy-Item $p (Join-Path $backup (Split-Path $f -Leaf)) -Force }
+  }
+  if (Test-Path (Join-Path $APP "daemon\i18n")) { Copy-Item (Join-Path $APP "daemon\i18n") (Join-Path $backup "i18n") -Recurse -Force }
+  Remove-Item -Recurse -Force $APP
 }
-
-# ---- 7) คอมไพล์ shell ----------------------------------------------------------------
-Step 7 "คอมไพล์ตัวโปรแกรม (ครั้งแรกใช้เวลา ~2-3 นาที)"
-$exe = Join-Path $app "shell\target\release\bagidea-office-shell.exe"
-if (Test-Path $exe) { Skip "มี exe อยู่แล้ว" }
-else {
-  Push-Location (Join-Path $app "shell")
-  cargo build --release
-  Pop-Location
-  if (Test-Path $exe) { Ok "คอมไพล์เสร็จ" } else { Warn "คอมไพล์ไม่สำเร็จ - เปิดเทอร์มินัลใหม่ (ให้ PATH ของ rust มา) แล้วรันสคริปต์นี้อีกครั้ง"; exit 1 }
+New-Item -ItemType Directory -Force $APP | Out-Null
+Expand-Archive -Path $src -DestinationPath $APP -Force
+if (Test-Path $backup) {
+  Get-ChildItem $backup -File | ForEach-Object { Copy-Item $_.FullName (Join-Path $APP ("daemon\" + $_.Name)) -Force }
+  if (Test-Path (Join-Path $backup "i18n")) { Copy-Item (Join-Path $backup "i18n") (Join-Path $APP "daemon\i18n") -Recurse -Force }
+  Ok "กู้คืนข้อมูลผู้ใช้เดิมแล้ว"
 }
+Ok "ติดตั้งที่ $APP"
 
-# ---- 8) ผูกคำสั่ง bagidea เข้า PATH -----------------------------------------------------
-Step 8 "คำสั่ง bagidea (CLI)"
+# ---- hook paths: the permission/notify hooks use absolute paths --------------
+Step 5 "ตั้งค่า hooks ให้ตรงเครื่องนี้"
+foreach ($cfg in @("$APP\.claude\settings.json", "$APP\workspace\.claude\settings.json")) {
+  if (Test-Path $cfg) {
+    $txt = Get-Content $cfg -Raw
+    $txt = [regex]::Replace($txt, '"command":\s*"[^"]*?([\w-]+\.ps1)"', { param($m)
+      '"command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"' +
+      ($APP -replace '\\','\\') + '\\daemon\\' + $m.Groups[1].Value + '\""' })
+    Set-Content $cfg $txt -Encoding utf8
+  }
+}
+Ok "hooks ชี้มาที่ตำแหน่งติดตั้งแล้ว"
+
+# ---- CLI on PATH + Start Menu shortcut ---------------------------------------
+Step 6 "คำสั่ง bagidea + shortcut"
+$exe = Join-Path $APP "shell\target\release\bagidea-office-shell.exe"
 $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
-if ($userPath -notlike "*$app*") {
-  [Environment]::SetEnvironmentVariable("Path", "$userPath;$app", "User")
-  Ok "เพิ่มเข้า PATH แล้ว - เปิดเทอร์มินัลใหม่แล้วใช้ได้เลย: bagidea help"
-} else { Skip "อยู่ใน PATH แล้ว" }
-
-# ---- 9) Shortcut ---------------------------------------------------------------------
-Step 9 "Shortcut"
+if ($userPath -notlike "*$APP*") {
+  [Environment]::SetEnvironmentVariable("Path", "$userPath;$APP", "User"); Ok "เพิ่ม bagidea เข้า PATH แล้ว (เปิดเทอร์มินัลใหม่)" }
+else { Skip "อยู่ใน PATH แล้ว" }
 $ws = New-Object -ComObject WScript.Shell
 $lnk = $ws.CreateShortcut([IO.Path]::Combine($env:APPDATA, "Microsoft\Windows\Start Menu\Programs\BagIdea Office.lnk"))
-$lnk.TargetPath = $exe
-$lnk.WorkingDirectory = Split-Path $exe
-$lnk.Save()
+$lnk.TargetPath = $exe; $lnk.WorkingDirectory = Split-Path $exe; $lnk.Save()
 Ok "สร้าง Start Menu shortcut แล้ว"
 
-# ---- done ----------------------------------------------------------------------------
 Write-Host ""
 Write-Host "  =============================================" -ForegroundColor Green
 Write-Host "   ติดตั้งเสร็จแล้ว!" -ForegroundColor Green
 Write-Host "  =============================================" -ForegroundColor Green
-Write-Host ""
-Write-Host "   ครั้งแรก: เปิดเทอร์มินัลใหม่ แล้วรัน  claude  เพื่อ login Claude ก่อน" -ForegroundColor Yellow
-Write-Host "   จากนั้นเปิดออฟฟิศ:  bagidea start   (หรือ Start Menu > BagIdea Office)" -ForegroundColor Cyan
+Write-Host "   ครั้งแรก: เปิดเทอร์มินัลใหม่ รัน  claude  เพื่อ login Claude" -ForegroundColor Yellow
+Write-Host "   จากนั้น:  bagidea start   (หรือ Start Menu > BagIdea Office)" -ForegroundColor Cyan
 Write-Host ""
 $go = Read-Host "  เปิดโปรแกรมเลยไหม? (y/n)"
-if ($go -eq "y") { Start-Process -FilePath $exe -WorkingDirectory (Split-Path $exe) }
+if ($go -eq "y" -and (Test-Path $exe)) { Start-Process -FilePath $exe -WorkingDirectory (Split-Path $exe) }
