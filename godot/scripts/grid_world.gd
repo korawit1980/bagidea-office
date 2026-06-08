@@ -24,17 +24,17 @@ var room_order: Array = [
 	"rec",   "dormx", "dorm",
 ]
 
-# kind → {label, floor color, accent}
+# kind → {label, floor tint (LIGHT pastel — polished metal catches SSR), accent light}
 const ROOM_DEFS := {
-	"exec":    {"label": "EXECUTIVE", "floor": "2c2418", "accent": "ffb14a"},
-	"ops":     {"label": "OPS FLOOR", "floor": "1b2436", "accent": "4ec3ff"},
-	"server":  {"label": "SERVER",    "floor": "16241d", "accent": "55ffaa"},
-	"lobby":   {"label": "LOBBY",     "floor": "241a1a", "accent": "ff5a4a"},
-	"cafe":    {"label": "CAFETERIA", "floor": "2a1d10", "accent": "ffb874"},
-	"meeting": {"label": "MEETING",   "floor": "201a2a", "accent": "b48cff"},
-	"rec":     {"label": "RECREATION","floor": "16241d", "accent": "7effc8"},
-	"dormx":   {"label": "DORM XL",   "floor": "1a1c2a", "accent": "8ab4ff"},
-	"dorm":    {"label": "DORM",      "floor": "1c1e2c", "accent": "9ab0ff"},
+	"exec":    {"label": "EXECUTIVE", "tint": "ffe7c2", "accent": "ffb14a"},
+	"ops":     {"label": "OPS FLOOR", "tint": "cfe2ff", "accent": "4ec3ff"},
+	"server":  {"label": "SERVER",    "tint": "c8ffe0", "accent": "55ffaa"},
+	"lobby":   {"label": "LOBBY",     "tint": "ffd8d0", "accent": "ff7a5a"},
+	"cafe":    {"label": "CAFETERIA", "tint": "ffe2c0", "accent": "ffb874"},
+	"meeting": {"label": "MEETING",   "tint": "e3d6ff", "accent": "b48cff"},
+	"rec":     {"label": "RECREATION","tint": "d4ffd8", "accent": "7effc8"},
+	"dormx":   {"label": "DORM XL",   "tint": "d2dcff", "accent": "8ab4ff"},
+	"dorm":    {"label": "DORM",      "tint": "d6dcff", "accent": "9ab0ff"},
 }
 
 # agent anchors per room kind — LOCAL offset from cell centre (y = 0.86 floor).
@@ -85,12 +85,24 @@ func _build() -> void:
 	# ground slab + outer perimeter wall around the whole grid
 	var halfx := GRID_COLS * CELL * 0.5
 	var halfz := GRID_ROWS * CELL * 0.5
-	_box(Vector3(0, -0.1, 0), Vector3(GRID_COLS * CELL + 0.4, 0.2, GRID_ROWS * CELL + 0.4), _m("0e1016", 0.6))
-	var wallm := _m("20232e", 0.9)
-	_box(Vector3(0, WALL_H * 0.5, -halfz), Vector3(GRID_COLS * CELL + WALL_T, WALL_H, WALL_T), wallm)
-	_box(Vector3(0, WALL_H * 0.5,  halfz), Vector3(GRID_COLS * CELL + WALL_T, WALL_H, WALL_T), wallm)
-	_box(Vector3(-halfx, WALL_H * 0.5, 0), Vector3(WALL_T, WALL_H, GRID_ROWS * CELL), wallm)
-	_box(Vector3( halfx, WALL_H * 0.5, 0), Vector3(WALL_T, WALL_H, GRID_ROWS * CELL), wallm)
+	_box(Vector3(0, -0.1, 0), Vector3(GRID_COLS * CELL + 0.4, 0.2, GRID_ROWS * CELL + 0.4), _m("232838", 0.5))
+	# perimeter: light wainscot base + glass window band on top (skyline-lit feel)
+	var lenx := GRID_COLS * CELL + WALL_T
+	var lenz := GRID_ROWS * CELL
+	_perim(Vector3(0, 0, -halfz), Vector3(lenx, 0, WALL_T))
+	_perim(Vector3(0, 0,  halfz), Vector3(lenx, 0, WALL_T))
+	_perim(Vector3(-halfx, 0, 0), Vector3(WALL_T, 0, lenz))
+	_perim(Vector3( halfx, 0, 0), Vector3(WALL_T, 0, lenz))
+
+func _perim(pos: Vector3, size: Vector3) -> void:
+	var base := _m("3a4150", 0.6)
+	var glass := _m("8fb6e6", 0.06, "5a7aa8", 0.5); glass.albedo_color.a = 0.32
+	glass.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	var bh := 0.9          # solid wainscot height
+	var gh := WALL_H - bh  # glass band above
+	var sz := Vector3(max(size.x, WALL_T), 0, max(size.z, WALL_T))
+	_box(Vector3(pos.x, bh * 0.5, pos.z), Vector3(sz.x, bh, sz.z), base)
+	_box(Vector3(pos.x, bh + gh * 0.5, pos.z), Vector3(sz.x, gh, sz.z), glass)
 
 	for slot in range(GRID_COLS * GRID_ROWS):
 		var center := slot_center(slot)
@@ -212,37 +224,76 @@ func _reslot_anchor(aname: String, from_slot: int, to_slot: int) -> void:
 		astar.connect_points(_wp_ids[aname], to_hub)
 
 ## Build one room's contents at LOCAL origin (cell centre = 0,0,0).
+## Matches the original art: polished tinted metal floor + LOW glass railings
+## (not tall opaque walls — those felt cramped) + warm accent lighting.
 func _build_room(room: Node3D, kind: String) -> void:
 	var d: Dictionary = ROOM_DEFS.get(kind, ROOM_DEFS["ops"])
+	var tint := Color(String(d["tint"]))
+	var kit := _kit_avail()
+	# ── floor: polished metal tiles, tinted per room (catch SSR reflections) ──
+	if kit:
+		_floor_tiles(room, tint)
+	else:
+		var fl := _box(Vector3(0, 0.02, 0), Vector3(CELL - WALL_T, 0.04, CELL - WALL_T), _m(String(d["tint"]), 0.18))
+		room.add_child(fl)
+	# ── low dividers: knee-to-waist glass railings, open and airy ────────────
+	_dividers(room, tint)
+	# ── lighting: ONE soft accent dome (sun + ambient already light the floor;
+	#    extra lights wash the polished tiles out to white) ───────────────────
+	var lamp := OmniLight3D.new(); lamp.position = Vector3(0, 2.6, 0)
+	lamp.light_color = Color(String(d["accent"])); lamp.light_energy = 0.9; lamp.omni_range = CELL * 0.85
+	room.add_child(lamp)
+	_furnish(room, kind, String(d["accent"]))
+
+## Polished tinted metal floor — 2×2 kit tiles stretched to the cell.
+func _floor_tiles(room: Node3D, tint: Color) -> void:
+	var span := CELL - WALL_T
+	var n := 2
+	for ix in n:
+		for iz in n:
+			var px := ((ix + 0.5) / float(n) - 0.5) * span
+			var pz := ((iz + 0.5) / float(n) - 0.5) * span
+			var tile := _kit_node(room, "Floor_Metal_Square", Vector3(px, 0, pz), 0.0,
+				Vector3(span / n / 4.0, 1.0, span / n / 4.0))
+			# mid-tone, not pastel — pastel blows out to white under the sun
+			if tile: _tint_meshes(tile, tint * 0.62, 0.42)
+
+## Four low glass railings (one per side), each split around a centre door gap.
+func _dividers(room: Node3D, tint: Color) -> void:
 	var half := CELL * 0.5
-	# floor carpet
-	var fl := _box(Vector3(0, 0.01, 0), Vector3(CELL - WALL_T, 0.04, CELL - WALL_T), _m(String(d["floor"]), 0.95))
-	room.add_child(fl)
-	# four inner walls, each split around a centre door gap
-	var wm := _m("2a2e3a", 0.85)
 	var side := (CELL - DOOR_W) * 0.5
 	var off := (DOOR_W + side) * 0.5
+	var kit := _kit_avail()
 	for s in [-1.0, 1.0]:
-		# walls running along X (north/south sides), gap in the middle
-		var nz: float = s * half
-		room.add_child(_box(Vector3(-off, WALL_H * 0.5, nz), Vector3(side, WALL_H, WALL_T), wm))
-		room.add_child(_box(Vector3( off, WALL_H * 0.5, nz), Vector3(side, WALL_H, WALL_T), wm))
-		# walls running along Z (east/west sides)
-		var nx: float = s * half
-		room.add_child(_box(Vector3(nx, WALL_H * 0.5, -off), Vector3(WALL_T, WALL_H, side), wm))
-		room.add_child(_box(Vector3(nx, WALL_H * 0.5,  off), Vector3(WALL_T, WALL_H, side), wm))
-	# accent ceiling light
-	var lamp := OmniLight3D.new(); lamp.position = Vector3(0, WALL_H - 0.2, 0)
-	lamp.light_color = Color(String(d["accent"])); lamp.light_energy = 1.4; lamp.omni_range = CELL * 0.9
-	room.add_child(lamp)
-	# floating room label so the top-down render is readable
-	var lbl := Label3D.new()
-	lbl.text = String(d["label"]); lbl.font_size = 64; lbl.pixel_size = 0.012
-	lbl.modulate = Color(String(d["accent"]))
-	lbl.position = Vector3(0, WALL_H + 0.6, 0); lbl.rotation_degrees = Vector3(-90, 0, 0)
-	lbl.billboard = BaseMaterial3D.BILLBOARD_DISABLED
-	room.add_child(lbl)
-	_furnish(room, kind, String(d["accent"]))
+		var n: float = s * half
+		if kit:
+			var sx := Vector3(side / 3.92, 1.0, 1.0)
+			_kit_node(room, "Railing_Flat", Vector3(-off, 0, n), 0.0, sx)
+			_kit_node(room, "Railing_Flat", Vector3(off, 0, n), 0.0, sx)
+			_kit_node(room, "Railing_Flat", Vector3(n, 0, -off), 90.0, sx)
+			_kit_node(room, "Railing_Flat", Vector3(n, 0, off), 90.0, sx)
+		else:
+			var gm := _m("aac6e8", 0.08); gm.albedo_color.a = 0.5
+			gm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			room.add_child(_box(Vector3(-off, 0.55, n), Vector3(side, 1.1, 0.06), gm))
+			room.add_child(_box(Vector3(off, 0.55, n), Vector3(side, 1.1, 0.06), gm))
+			room.add_child(_box(Vector3(n, 0.55, -off), Vector3(0.06, 1.1, side), gm))
+			room.add_child(_box(Vector3(n, 0.55, off), Vector3(0.06, 1.1, side), gm))
+
+## Tint + polish a kit model's meshes (mirrors world_builder._tint_meshes).
+func _tint_meshes(node: Node, tint: Color, rough := -1.0) -> void:
+	if node is MeshInstance3D and (node as MeshInstance3D).mesh:
+		var mi: MeshInstance3D = node
+		for i in mi.mesh.get_surface_count():
+			var src := mi.get_active_material(i)
+			if src is BaseMaterial3D:
+				var dup: BaseMaterial3D = src.duplicate()
+				dup.albedo_color = tint
+				if rough >= 0.0:
+					dup.roughness = rough; dup.metallic = 0.12
+				mi.set_surface_override_material(i, dup)
+	for c in node.get_children():
+		_tint_meshes(c, tint, rough)
 
 # ----------------------------------------------------------- kit furniture
 const SCIFI_DIR := "res://assets/scifi/"
@@ -252,15 +303,19 @@ func _kit_avail() -> bool:
 	return FileAccess.file_exists(ProjectSettings.globalize_path(SCIFI_DIR + "Chair_1.glb"))
 
 func _kit(room: Node3D, model: String, lpos: Vector3, roty := 0.0, s := 1.0) -> void:
+	_kit_node(room, model, lpos, roty, Vector3.ONE * s)
+
+func _kit_node(room: Node3D, model: String, lpos: Vector3, roty: float, sv: Vector3) -> Node3D:
 	if not _kit_cache.has(model):
 		var doc := GLTFDocument.new(); var st := GLTFState.new()
 		var path := ProjectSettings.globalize_path(SCIFI_DIR + model + ".glb")
 		_kit_cache[model] = doc.generate_scene(st) if doc.append_from_file(path, st) == OK else null
 	var proto = _kit_cache[model]
-	if proto == null: return
+	if proto == null: return null
 	var inst: Node3D = proto.duplicate()
-	inst.position = lpos; inst.rotation_degrees = Vector3(0, roty, 0); inst.scale = Vector3.ONE * s
+	inst.position = lpos; inst.rotation_degrees = Vector3(0, roty, 0); inst.scale = sv
 	room.add_child(inst)
+	return inst
 
 ## Per-room hero furniture (kit when present, else simple blocks). All LOCAL to
 ## the cell centre so it rides the container when rooms swap.
