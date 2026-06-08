@@ -7,8 +7,11 @@ Not a dashboard. Not a chat window. A **world** that renders the true state of y
 
 🌐 **Website:** the landing page + browsable docs live in [`web/`](web/) (deployable to any static host).
 
-![The office, alive on a real desktop — the team at their desks](docs/img/world.png)
-*Captured live from the wallpaper: the CEO, the Director (Shino) and staff at work, glowing monitors, the brand billboard, the server room humming — desktop icons render on top. This is a real wallpaper.*
+![The office at night — glowing screens, the team at work, the brand billboard lit](docs/img/world.png)
+*Captured live from the wallpaper at night: the CEO (with an equipped aura), the Director (Shino) and staff at their desks, monitors glowing, the brand billboard lit, fireflies in the countryside — desktop icons render on top. A real wallpaper.*
+
+![The same office on the day shift](docs/img/day.png)
+*…and the day shift: the local-time day/night cycle drives the sun, sky, lighting and reflections in real time.*
 
 > ✅ **Status: working product (Windows 11).** The full pipeline works end-to-end: wallpaper → daemon → real Claude Code sessions working *inside real project folders* → spatialized approvals → agent management UI → Telegram/Discord/LINE channels → CLI → self-updater. Some art packs are not bundled (licenses — see [Art assets](#art-assets)); the game falls back to procedural placeholders without them.
 
