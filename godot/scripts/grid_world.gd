@@ -13,7 +13,7 @@ extends Node3D
 const CELL := 8.0          # cell pitch (room interior ~ CELL - wall)
 const GRID_COLS := 3
 const GRID_ROWS := 3
-const WALL_H := 2.6
+const WALL_H := 3.2
 const WALL_T := 0.18
 const DOOR_W := 2.2        # door-gap width on each interior side
 
@@ -86,13 +86,13 @@ func _build() -> void:
 	var halfx := GRID_COLS * CELL * 0.5
 	var halfz := GRID_ROWS * CELL * 0.5
 	_box(Vector3(0, -0.1, 0), Vector3(GRID_COLS * CELL + 0.4, 0.2, GRID_ROWS * CELL + 0.4), _m("232838", 0.5))
-	# perimeter: light wainscot base + glass window band on top (skyline-lit feel)
+	# perimeter is a U: back (north) + the two sides, with the FRONT (south, the
+	# camera-facing side) left open — same silhouette as the original office.
 	var lenx := GRID_COLS * CELL + WALL_T
 	var lenz := GRID_ROWS * CELL
-	_perim(Vector3(0, 0, -halfz), Vector3(lenx, 0, WALL_T))
-	_perim(Vector3(0, 0,  halfz), Vector3(lenx, 0, WALL_T))
-	_perim(Vector3(-halfx, 0, 0), Vector3(WALL_T, 0, lenz))
-	_perim(Vector3( halfx, 0, 0), Vector3(WALL_T, 0, lenz))
+	_perim(Vector3(0, 0, -halfz), Vector3(lenx, 0, WALL_T))      # back wall
+	_perim(Vector3(-halfx, 0, 0), Vector3(WALL_T, 0, lenz))      # west wall
+	_perim(Vector3( halfx, 0, 0), Vector3(WALL_T, 0, lenz))      # east wall
 
 func _perim(pos: Vector3, size: Vector3) -> void:
 	var base := _m("3a4150", 0.6)
@@ -341,13 +341,16 @@ func _furnish(room: Node3D, kind: String, accent: String) -> void:
 					_kit(room, "Chair_1", sp + Vector3(0, 0, -0.85), 180.0, 0.55)
 		"server":
 			if kit:
-				_kit(room, "Generator", Vector3(0.6, 0, -1.8), 25.0, 0.55)
-				_kit(room, "Generator_Pile_Chonky", Vector3(-2.2, 0, -2.6), 0.0, 0.45)
-				_kit(room, "Battery_Green", Vector3(2.6, 0, 0.6), 90.0, 0.8)
-				_kit(room, "Battery_Blue", Vector3(2.6, 0, 1.5), 90.0, 0.8)
-				_kit(room, "Generator_Pile_Small", Vector3(-2.4, 0, 2.0), 0.0, 0.5)
-			else:
-				room.add_child(_box(Vector3(0, 0.7, -1.8), Vector3(1.6, 1.4, 1.0), _m("1c2a22", 0.4)))
+				_kit(room, "Generator", Vector3(0, 0, 2.6), 0.0, 0.5)
+				_kit(room, "Battery_Green", Vector3(-1.2, 0, 2.7), 0.0, 0.7)
+				_kit(room, "Battery_Blue", Vector3(1.2, 0, 2.7), 0.0, 0.7)
+				_kit_node(room, "Wall_Display_Green", Vector3(0, 0.4, -3.4), 0.0, Vector3.ONE * 0.8)
+			# blinking server racks down both sides + a glowing data-core hologram
+			var rack_cols := ["55ff9e", "4ec3ff", "ffd24a", "ff6a8a"]
+			for i in 3:
+				_server_rack(room, Vector3(-2.7, 0, -2.0 + i * 1.9), 90.0, rack_cols[i % 4])
+				_server_rack(room, Vector3(2.7, 0, -2.0 + i * 1.9), -90.0, rack_cols[(i + 2) % 4])
+			_holo_core(room, Vector3(0, 0, -0.4), accent)
 		"meeting":
 			if kit:
 				_kit(room, "Octo_Table", Vector3(0, 0, 0), 0.0, 0.45)
@@ -401,6 +404,28 @@ func _furnish(room: Node3D, kind: String, accent: String) -> void:
 			if kit:
 				_kit(room, "End_Table", Vector3(2.4, 0, -2.2), 0.0, 0.8)
 				_kit(room, "3D_Chess_Board", Vector3(2.4, 0.75, -2.2), 25.0, 0.35)
+
+## A blinking server rack: dark cabinet + a stack of glowing LED strips.
+func _server_rack(room: Node3D, pos: Vector3, roty: float, color: String) -> void:
+	var rack := Node3D.new(); rack.position = pos; rack.rotation_degrees = Vector3(0, roty, 0)
+	room.add_child(rack)
+	rack.add_child(_box(Vector3(0, 0.9, 0), Vector3(0.8, 1.8, 0.55), _m("10141c", 0.5)))
+	var led := _m(color, 0.3, color, 2.2)
+	for i in 7:
+		rack.add_child(_box(Vector3(0, 0.34 + i * 0.22, 0.29), Vector3(0.62, 0.07, 0.03), led))
+
+## A holographic data core: glowing translucent cone + a pad + a light.
+func _holo_core(room: Node3D, pos: Vector3, accent: String) -> void:
+	room.add_child(_box(pos + Vector3(0, 0.05, 0), Vector3(1.1, 0.1, 1.1), _m("0a0e16", 0.4)))
+	var holo := MeshInstance3D.new()
+	var cyl := CylinderMesh.new(); cyl.top_radius = 0.06; cyl.bottom_radius = 0.5; cyl.height = 1.7
+	holo.mesh = cyl
+	var hm := _m(accent, 0.1, accent, 1.8); hm.albedo_color.a = 0.38
+	hm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	holo.material_override = hm; holo.position = pos + Vector3(0, 1.05, 0)
+	room.add_child(holo)
+	var l := OmniLight3D.new(); l.light_color = Color(accent); l.light_energy = 1.3; l.omni_range = 4.0
+	l.position = pos + Vector3(0, 1.3, 0); room.add_child(l)
 
 func _m(hex: String, rough := 0.8, emit := "", emit_e := 0.0) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
