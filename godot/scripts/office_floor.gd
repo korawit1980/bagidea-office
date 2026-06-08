@@ -80,61 +80,15 @@ func _ready() -> void:
 		cam.attributes.dof_blur_far_enabled = false
 		cam.attributes.dof_blur_near_enabled = false
 
-var _boot_splash_layer: CanvasLayer
-
 ## 🎨 Switch this instance into the standalone 3D Office Editor.
-## Phase A: keep the booted transparent/borderless window and float an animated
-## logo over the desktop (same feel as the main app — hides Godot's black boot
-## splash). Phase B (after a beat): become the real opaque editor window.
+## Boots EXACTLY like the main app: the window stays transparent/borderless while
+## everything loads (so Godot's small centred boot splash floats over the desktop
+## — no black box), then goes opaque + windowed after the first real frame.
 func _enter_editor_mode() -> void:
 	DisplayServer.window_set_title("BagIdea Office — 3D Editor")
 	var icon := Image.new()
 	if icon.load(ProjectSettings.globalize_path("res://assets/brand/logo_ico_cute.png")) == OK:
 		DisplayServer.set_icon(icon)
-	# transparent window so the logo floats over the desktop during boot
-	get_viewport().transparent_bg = true
-	RenderingServer.set_default_clear_color(Color(0, 0, 0, 0))
-	_boot_logo_splash()
-	await get_tree().create_timer(1.4).timeout
-	_editor_open_real()
-
-## A transparent, animated (gentle pulse) brand logo over the desktop — the boot
-## intro, matching the main app.
-func _boot_logo_splash() -> void:
-	_boot_splash_layer = CanvasLayer.new(); _boot_splash_layer.layer = 250; add_child(_boot_splash_layer)
-	var cc := CenterContainer.new(); cc.set_anchors_preset(Control.PRESET_FULL_RECT); _boot_splash_layer.add_child(cc)
-	var logo := TextureRect.new()
-	var img := Image.load_from_file(ProjectSettings.globalize_path("res://assets/brand/logo.png"))
-	if img: logo.texture = ImageTexture.create_from_image(img)
-	logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	logo.custom_minimum_size = Vector2(480, 150)
-	logo.pivot_offset = Vector2(240, 75)
-	cc.add_child(logo)
-	var tw := create_tween().set_loops()
-	tw.tween_property(logo, "scale", Vector2(1.07, 1.07), 0.7).set_trans(Tween.TRANS_SINE)
-	tw.tween_property(logo, "scale", Vector2(1.0, 1.0), 0.7).set_trans(Tween.TRANS_SINE)
-
-## Phase B: the actual editor window.
-func _editor_open_real() -> void:
-	if is_instance_valid(_boot_splash_layer): _boot_splash_layer.queue_free()
-	# a normal, framed, resizable window (NOT the wallpaper)
-	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
-	DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_BORDERLESS, false)
-	var win := Vector2i(1280, 800)
-	DisplayServer.window_set_size(win)
-	var scr := DisplayServer.window_get_current_screen()
-	var sp := DisplayServer.screen_get_position(scr)
-	var ss := DisplayServer.screen_get_size(scr)
-	DisplayServer.window_set_position(sp + (ss - win) / 2)
-	get_window().grab_focus()
-	DisplayServer.window_move_to_foreground()
-	get_tree().create_timer(0.6).timeout.connect(func():
-		DisplayServer.window_move_to_foreground(); get_window().grab_focus())
-	# opaque window with the office sky as the background
-	get_viewport().transparent_bg = false
-	DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_TRANSPARENT, false)
-	RenderingServer.set_default_clear_color(Color(0.05, 0.07, 0.12))
-	Engine.max_fps = 60
 	# bright, fixed daylight for clear editing
 	_cli_pinned = true
 	_hour_override = 12.0
@@ -158,34 +112,30 @@ func _editor_open_real() -> void:
 	if cam.attributes:
 		cam.attributes.dof_blur_far_enabled = false
 		cam.attributes.dof_blur_near_enabled = false
-	# drive the camera + editing
+	# drive the camera + editing (built while the transparent boot splash shows)
 	var ed: Node = load("res://scripts/map_editor.gd").new()
 	ed.name = "MapEditor"
 	add_child(ed)
 	ed.setup($CameraRig, cam)
-	_editor_splash()
-
-## Branded loading splash (logo on the house-dark background) over the editor
-## while the world settles — matches the main app's boot feel — then fades out.
-func _editor_splash() -> void:
-	var layer := CanvasLayer.new(); layer.layer = 200; add_child(layer)
-	var root := Control.new(); root.set_anchors_preset(Control.PRESET_FULL_RECT); layer.add_child(root)
-	var bg := ColorRect.new(); bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	bg.color = Color(0.04, 0.07, 0.12); root.add_child(bg)
-	var cc := CenterContainer.new(); cc.set_anchors_preset(Control.PRESET_FULL_RECT); root.add_child(cc)
-	var box := VBoxContainer.new(); box.alignment = BoxContainer.ALIGNMENT_CENTER
-	box.add_theme_constant_override("separation", 14); cc.add_child(box)
-	var logo := TextureRect.new()
-	var img := Image.load_from_file(ProjectSettings.globalize_path("res://assets/brand/logo.png"))
-	if img: logo.texture = ImageTexture.create_from_image(img)
-	logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	logo.custom_minimum_size = Vector2(460, 150); box.add_child(logo)
-	var sub := Label.new(); sub.text = "Office Editor"; sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	sub.modulate = Color(0.6, 0.78, 1.0); sub.add_theme_font_size_override("font_size", 18); box.add_child(sub)
-	get_tree().create_timer(0.7).timeout.connect(func():
-		var tw := create_tween()
-		tw.tween_property(root, "modulate:a", 0.0, 0.6)
-		tw.tween_callback(layer.queue_free))
+	# first real frame is ready → drop the transparent boot splash, become the
+	# opaque framed editor window (same handoff as the main app).
+	await RenderingServer.frame_post_draw
+	get_viewport().transparent_bg = false
+	DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_TRANSPARENT, false)
+	RenderingServer.set_default_clear_color(Color(0.05, 0.07, 0.12))
+	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+	DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_BORDERLESS, false)
+	var win := Vector2i(1280, 800)
+	DisplayServer.window_set_size(win)
+	var scr := DisplayServer.window_get_current_screen()
+	var sp := DisplayServer.screen_get_position(scr)
+	var ss := DisplayServer.screen_get_size(scr)
+	DisplayServer.window_set_position(sp + (ss - win) / 2)
+	get_window().grab_focus()
+	DisplayServer.window_move_to_foreground()
+	get_tree().create_timer(0.6).timeout.connect(func():
+		DisplayServer.window_move_to_foreground(); get_window().grab_focus())
+	Engine.max_fps = 60
 
 ## Manual atmosphere from the overlay: {"hour": 17.5} pins the clock for
 ## debugging/beauty shots; {"hour": "auto"} hands it back to real time.
