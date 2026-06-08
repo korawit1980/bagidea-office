@@ -255,7 +255,7 @@ func _make_highlight() -> void:
 	# a bright disc + ring on the floor + a soft pillar of light so the
 	# selected object is unmistakable from any angle.
 	_hi = MeshInstance3D.new()
-	var tm := TorusMesh.new(); tm.inner_radius = 0.95; tm.outer_radius = 1.25
+	var tm := TorusMesh.new(); tm.inner_radius = 0.5; tm.outer_radius = 0.66
 	_hi.mesh = tm
 	var m := StandardMaterial3D.new(); m.albedo_color = Color(0.45, 0.9, 1.0)
 	m.emission_enabled = true; m.emission = Color(0.45, 0.9, 1.0); m.emission_energy_multiplier = 4.0
@@ -266,9 +266,9 @@ func _make_highlight() -> void:
 	add_child(_hi)
 	# pillar
 	var pil := MeshInstance3D.new()
-	var cm := CylinderMesh.new(); cm.top_radius = 0.9; cm.bottom_radius = 0.9; cm.height = 3.0
-	pil.mesh = cm; pil.position.y = 1.5; pil.name = "Pillar"
-	var pm := StandardMaterial3D.new(); pm.albedo_color = Color(0.45, 0.9, 1.0, 0.12)
+	var cm := CylinderMesh.new(); cm.top_radius = 0.42; cm.bottom_radius = 0.42; cm.height = 2.4
+	pil.mesh = cm; pil.position.y = 1.2; pil.name = "Pillar"
+	var pm := StandardMaterial3D.new(); pm.albedo_color = Color(0.45, 0.9, 1.0, 0.08)
 	pm.emission_enabled = true; pm.emission = Color(0.45, 0.9, 1.0); pm.emission_energy_multiplier = 1.0
 	pm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA; pm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	pm.cull_mode = BaseMaterial3D.CULL_DISABLED
