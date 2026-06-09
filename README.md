@@ -249,6 +249,14 @@ One pack is bundled; three are not (third-party licenses). Everything loads at
 runtime — no Godot import step — and **the game still runs without them**,
 falling back to procedural placeholder visuals.
 
+> **Bringing art to another machine you own.** Because the licensed packs aren't
+> in the repo, a fresh install shows procedural visuals. Zip your local
+> `godot/assets/{characters,scifi,env,decor,pixelfx,sounds}` and either drop them
+> into the new install's `godot/assets/`, or run the installer with
+> `-Assets <zip-or-folder-or-URL>` (or `$env:BAGIDEA_ASSETS_URL`) and it unpacks
+> them for you. Keep this for **your own machines** — don't redistribute the
+> licensed packs publicly.
+
 **Bundled** ✓ — [Elemental Magic FX by Binbun3D](https://binbun3d.itch.io/elemental-magic-fx) (CC0): the equippable aura rings.
 
 **Characters** — [Customizable Characters Top-Down 32x32 by Schwarnhild](https://schwarnhild.itch.io/customizable-characters-top-down-32x32):

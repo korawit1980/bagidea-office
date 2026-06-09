@@ -16,6 +16,11 @@
 param(
   [string]$Repo   = $(if ($env:BAGIDEA_REPO)   { $env:BAGIDEA_REPO }   else { "https://github.com/bagidea/bagidea-office.git" }),
   [string]$Branch = $(if ($env:BAGIDEA_BRANCH) { $env:BAGIDEA_BRANCH } else { "main" }),
+  # Optional art pack (characters + 3D models + sounds). The licensed packs are
+  # NOT in the public repo, so the office falls back to procedural visuals. Point
+  # -Assets at YOUR own zip/folder (or set $env:BAGIDEA_ASSETS_URL to a URL you
+  # host) and the installer drops them into godot/assets so it looks complete.
+  [string]$Assets = $env:BAGIDEA_ASSETS_URL,
   [switch]$SkipBuildTools
 )
 $ErrorActionPreference = "Continue"
@@ -152,6 +157,33 @@ if (Test-Path (Join-Path $APP ".git")) {
 } else {
   git clone --depth 1 --branch $Branch $Repo $APP
   Ok "cloned to $APP"
+}
+
+# ---- optional art pack (licensed packs are NOT in the public repo) -----------
+Step "7b" "Art assets (characters / 3D models / sounds)"
+$assetDir = Join-Path $APP "godot\assets"
+if ($Assets) {
+  try {
+    $srcZip = $Assets
+    if ($Assets -match "^https?://") {
+      $srcZip = Join-Path $env:TEMP "bagidea-assets.zip"
+      Warn "downloading art pack..."
+      Invoke-WebRequest -Uri $Assets -OutFile $srcZip
+    }
+    if (Test-Path $srcZip -PathType Container) {
+      Copy-Item (Join-Path $srcZip "*") $assetDir -Recurse -Force
+      Ok "copied art pack into godot\assets"
+    } elseif (Test-Path $srcZip) {
+      Expand-Archive -Path $srcZip -DestinationPath $assetDir -Force
+      Ok "art pack installed into godot\assets"
+    } else {
+      Warn "art pack not found: $Assets (skipping; procedural visuals)"
+    }
+  } catch {
+    Warn "art pack step failed (skipping; procedural visuals)"
+  }
+} else {
+  Skip "no -Assets given; using built-in procedural visuals (licensed packs: see README)"
 }
 
 # ---- build the Rust shell ----------------------------------------------------
