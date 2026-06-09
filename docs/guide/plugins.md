@@ -4,6 +4,12 @@ A **plugin** extends the office in real ways — a panel the user opens, HTTP
 routes, and **commands agents can drive**. Plugins are plain folders; no build
 step, zero dependencies. Drop one in `plugins/` and reload.
 
+![แผง PLUGINS — ติดตั้ง/รีโหลด/ลบ + ติดตั้งจาก GitHub](../img/plugins.png)
+
+> ⚙ → **PLUGINS**: ดูปลั๊กอินที่ติดตั้ง, เปิดแผงของแต่ละตัว, ลบ, หรือ
+> **ติดตั้งจาก GitHub repo ใดก็ได้** — วาง URL แล้วกดติดตั้ง (เริ่มจาก
+> template ทางการได้: `github.com/bagidea/bagidea-office-template`)
+
 This guide is written so a **person** OR an **agent** can build a working plugin
 from scratch. The shipped `music` and `calculator` plugins are full examples.
 

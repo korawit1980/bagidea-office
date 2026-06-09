@@ -596,6 +596,7 @@ if (migrated) saveProjects();
 let projWin = {};           // project id -> visible (true) / hidden (false)
 const projRuns = {};        // project id -> active AI run count
 const projAgents = {};      // project id -> {agentId: run count} (who's working)
+const projChildren = {};    // project id -> Set<ChildProcess> (so the owner can stop the work and take over)
 const WINPROJ = path.join(__dirname, "winproj.ps1");
 const LIVEVIEW = path.join(__dirname, "liveview.ps1");
 
@@ -990,6 +991,14 @@ function runClaude(agent, prompt, opts = {}) {
     shell: true,
     env: { ...process.env, ...(reg.apiKeys || {}), OFFICE_ADAPTER: "1", OFFICE_AGENT: agent, OFFICE_TASK: task },
   });
+  // Track the run per project so the owner can stop it and take the project over.
+  if (projId) {
+    (projChildren[projId] = projChildren[projId] || new Set()).add(child);
+    child.on("close", () => {
+      const s = projChildren[projId];
+      if (s) { s.delete(child); if (!s.size) delete projChildren[projId]; }
+    });
+  }
   // The split capability + project map ride on the wire only — never in
   // the chat log.
   const canSplit = !opts.noSub && !agent.includes("#");
@@ -1715,6 +1724,18 @@ function localVersion() {
   try { return String(fs.readFileSync(path.join(__dirname, "..", "VERSION"), "utf8")).trim(); }
   catch { return "0.0.0"; }
 }
+// Strict semver "greater than" — so a machine AHEAD of main (e.g. on the dev
+// branch) is NOT told an OLDER main version is "new". Only a genuinely newer
+// release notifies.
+function semverGt(a, b) {
+  const pa = String(a).split(".").map((n) => parseInt(n, 10) || 0);
+  const pb = String(b).split(".").map((n) => parseInt(n, 10) || 0);
+  for (let i = 0; i < 3; i++) {
+    if ((pa[i] || 0) > (pb[i] || 0)) return true;
+    if ((pa[i] || 0) < (pb[i] || 0)) return false;
+  }
+  return false;
+}
 const APP_VERSION = localVersion();
 let latestVersion = APP_VERSION;   // newest seen on main (for /version + banner)
 let updateNotified = null;
@@ -1732,7 +1753,8 @@ function checkUpdate() {
       const remote = String(b).trim().split(/\s+/)[0];
       if (!/^\d+\.\d+\.\d+/.test(remote)) return;   // guard against 404 pages etc.
       latestVersion = remote;
-      if (remote !== local && updateNotified !== remote) {
+      // Notify ONLY when main is strictly newer than what we have.
+      if (semverGt(remote, local) && updateNotified !== remote) {
         updateNotified = remote;
         broadcast({ type: "update.available", version: remote, current: local }, false);
         console.log("[update] new version available:", remote, "(have", local + ")");
@@ -2445,6 +2467,32 @@ const server = http.createServer((req, res) => {
       } catch (e) { res.writeHead(400); res.end(String(e.message)); }
     });
 
+  } else if (req.method === "POST" && req.url === "/projects/stopwork") {
+    // ⏹ Stop the AGENT working inside a project so the owner can take it over
+    // (the lock's "stop to enter" path). Human-UI only.
+    if (!req.headers["x-bagidea-ui"]) { res.writeHead(403); return res.end("human UI only"); }
+    readBody(req, (body) => {
+      try {
+        const { id } = JSON.parse(body);
+        const set = projChildren[id];
+        if (set) {
+          for (const c of set) {
+            try {
+              if (process.platform === "win32")
+                spawn("taskkill", ["/PID", String(c.pid), "/T", "/F"], { windowsHide: true });
+              else c.kill("SIGKILL");
+            } catch {}
+          }
+        }
+        // Clear the lock immediately; the children's close handlers also settle it.
+        projChildren[id] = new Set();
+        projRuns[id] = 0;
+        projAgents[id] = {};
+        broadcast({ type: "projects.changed" }, false);
+        res.writeHead(200); res.end("ok");
+      } catch (e) { res.writeHead(400); res.end(String(e.message)); }
+    });
+
   } else if (req.method === "GET" && req.url.startsWith("/fs")) {
     // Directory listing for the in-house folder picker (Blender-style UI in
     // the overlay — no off-theme Windows dialogs).
@@ -2866,7 +2914,7 @@ const server = http.createServer((req, res) => {
     // Local vs latest-released version (the VERSION file on main).
     res.writeHead(200, { "content-type": "application/json" });
     res.end(JSON.stringify({ version: APP_VERSION, latest: latestVersion,
-      updateAvailable: latestVersion !== APP_VERSION }));
+      updateAvailable: semverGt(latestVersion, APP_VERSION) }));
 
   } else if (req.method === "GET" && req.url === "/startup") {
     // Is the app set to launch with Windows? (HKCU Run key, same one the tray

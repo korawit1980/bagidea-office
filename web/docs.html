@@ -115,7 +115,10 @@ bagidea start   # launch the office</code></pre>
     <img src="img/overlay.png" alt="The chat overlay">
 
     <h3 id="projects" data-i18n="d_projects_h">Projects</h3>
-    <p data-i18n="d_projects_p">Register real folders as projects (with PLACE shorthands like "classroom → D:\Learning"). The Director can create new projects himself and route work into them; the assignee's Claude session runs inside that directory and is resumable. One window per project — ▶ opens it, or shows a live view while an agent works.</p>
+    <p data-i18n="d_projects_p">Register real folders as projects (with PLACE shorthands like "classroom → D:\Learning"). The Director can create new projects himself and route work into them; the assignee's Claude session runs inside that directory and is resumable. One occupant at a time: while an agent works a project you can't open it (a ⏹ stop-agent button with a two-click confirm lets you take over), and while you have it open an agent won't enter.</p>
+    <img src="img/projects.png" alt="The projects panel">
+    <img src="img/org.png" alt="The auto org chart">
+    <p data-i18n="d_org_p">The whole roster arranges itself into an org chart (🗂 → ORG): CEO → Director → mid → staff. Hire from ⚙ → AGENTS: name, role, avatar + aura, tier, a Persona Copilot that fills the prompt and picks fitting skills + tools, one of 16 voices, and the exact tools each agent may run.</p>
 
     <h3 id="security" data-i18n="d_security_h">Permissions</h3>
     <p data-i18n="d_security_p">Tools you grant in an agent's profile run silently — and the agent never even leaves its desk. For anything else, the agent walks to the Security Center and waits while a card pops up with the exact command. Choose Allow, ✓✓ Forever (remembers the grant), or Deny. No answer in 50 seconds auto-denies and the agent re-plans.</p>
@@ -132,6 +135,7 @@ bagidea start   # launch the office</code></pre>
 
     <h2 id="plugins" data-i18n="d_plugins_h">Plugins, skills & tools</h2>
     <p data-i18n="d_plugins_p">Plugins extend the office for real — a folder with a manifest can add UI panels, HTTP routes, and commands agents can drive, with ctx access to the registry, feed, broadcasting and even running Claude turns. Two core plugins ship in the box (🎵 Music Player, 🧮 Calculator); install more from any GitHub repo. Start from the official template, or read the worked example repos.</p>
+    <img src="img/plugins.png" alt="The plugins panel">
     <pre><code>bagidea plugin install https://github.com/bagidea/bagidea-office-template</code></pre>
     <p data-i18n="d_skills_p">Every office ships with a library of builtin skills (deep research, office control, plugin building, code review, docs, debugging, data wrangling, project kickoff, diagrams) you can assign to any agent, plus Hermes-style skills the office learns automatically after real work. Add new raw capability via MCP servers.</p>
 

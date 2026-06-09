@@ -37,6 +37,10 @@
   }
   .winbtn:hover { background: rgba(94,200,255,0.25); border-color: var(--accent); }
   .winbtn.hide:hover { background: rgba(255,84,72,0.3); border-color: #ff5448; }
+  /* "stop the agent to take over" pill — wider, labelled; arms on first click. */
+  .winbtn.work { width: auto; padding: 0 9px; gap: 4px; font-size: 11px;
+    background: rgba(94,200,255,0.18); border-color: rgba(94,200,255,0.5); color: #bfe6ff; }
+  .winbtn.work.arm { background: rgba(255,206,106,0.22); border-color: #ffce6a; color: #ffe2a8; }
 
   /* ---------- header ---------- */
   header {
@@ -2994,7 +2998,11 @@
           if (!st.length) st.push(`<span style="color:var(--dim)">⚪ ปิด — ไม่มีใครทำงาน</span>`);
           // State-driven controls: closed → เปิด; visible → ซ่อน+ปิด;
           // hidden → Resume+ปิด. Shell/folder always; ✕ always; 🗑 created-only.
-          const main = !p.open
+          // While an AGENT works here the project is LOCKED to you — the only
+          // primary action is to stop the agent and take over (two-click confirm).
+          const main = p.ai
+            ? `<div class="winbtn work" title="หยุด agent เพื่อเข้าไปทำเอง">⏹ หยุด agent</div>`
+            : !p.open
             ? `<div class="winbtn" title="เปิดโปรเจค (เลือก session ให้เองอัตโนมัติ)">▶</div>`
             : p.visible
               ? `<div class="winbtn" title="ซ่อนหน้าต่าง — claude ทำงานต่อเบื้องหลัง">🫥</div>
@@ -3019,7 +3027,22 @@
           const b = [...row.querySelectorAll(".winbtn")];
           const refresh = () => setTimeout(opsRefresh, 2600);
           const metaSpan = () => row.querySelector(".meta span");
-          if (!p.open) {
+          if (p.ai) {
+            // Two-click confirm: first arms the button, second stops the agent.
+            let armed = false;
+            b[0].onclick = async () => {
+              if (!armed) {
+                armed = true;
+                b[0].classList.add("arm");
+                b[0].textContent = "⏹ ยืนยันหยุด?";
+                setTimeout(() => { armed = false; b[0].classList.remove("arm"); b[0].textContent = "⏹ หยุด agent"; }, 4000);
+                return;
+              }
+              await api("/projects/stopwork", { id: p.id });
+              addChip("⏹ หยุดงาน agent แล้ว — เปิดโปรเจคเข้าไปทำต่อได้เลย");
+              refresh();
+            };
+          } else if (!p.open) {
             b[0].onclick = async () => {
               const r = await fetch("/projects/open", { method: "POST",
                 headers: { "content-type": "application/json", "x-bagidea-ui": "1" },

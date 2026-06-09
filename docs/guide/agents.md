@@ -10,6 +10,10 @@
 + `project-kickoff`, aura 🌿 nature, เสียง 🎈 หนุ่มขี้เล่น. จากนั้นค่อยจ้างทีมเพิ่ม
 ตามงาน — Shino จะกระจายงานให้เองตามความถนัด
 
+ทุกคนเรียงเป็นผังองค์กรอัตโนมัติ (🗂 → ORG): CEO → Director → tier 2 → tier 3
+
+![ผังองค์กรอัตโนมัติ](../img/org.png)
+
 ## จ้างพนักงานใหม่
 
 ⚙ Settings → AGENTS → **＋ Hire a new agent**
