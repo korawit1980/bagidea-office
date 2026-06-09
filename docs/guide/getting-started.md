@@ -12,16 +12,41 @@
 irm https://raw.githubusercontent.com/bagidea/bagidea-office/main/installer/install.ps1 | iex
 ```
 
-ตัวติดตั้งจะจัดการให้ทั้งหมด: Git, Node.js, Rust, Godot 4.6.3, Claude Code CLI,
-โคลนโปรแกรมไว้ที่ `%LOCALAPPDATA%\BagIdeaOffice`, คอมไพล์, ผูกคำสั่ง `bagidea`
-เข้า PATH และสร้าง Start Menu shortcut — รันซ้ำได้ปลอดภัย (ข้ามของที่มีแล้ว)
+ตัวติดตั้งจะจัดการให้ครบ **แม้บนเครื่องเปล่า** — ลงทุกอย่างที่ต้องใช้ให้เอง:
+Git, Node.js LTS, Rust, **Visual Studio C++ Build Tools** (ตัว linker ที่ Rust ต้องใช้
+และเป็นสาเหตุติดตั้งไม่ผ่านที่พบบ่อยที่สุด), Godot 4.6.3 และ Claude Code CLI →
+โคลนโปรแกรมไว้ที่ `%LOCALAPPDATA%\BagIdeaOffice` → คอมไพล์ → ตีตราไอคอนหน้าต่าง →
+ผูกคำสั่ง `bagidea` เข้า PATH และสร้าง Start Menu shortcut
 
-**ครั้งแรกเท่านั้น:** เปิดเทอร์มินัลใหม่ แล้วรัน `claude` หนึ่งครั้งเพื่อ login บัญชี Claude
-จากนั้น:
+- **รันซ้ำได้ปลอดภัย** — ข้ามของที่มีแล้ว, รันซ้ำ = `git pull` (ข้อมูลของคุณไม่หาย)
+- ของที่ลงผ่าน winget จะถูกดึงเข้า PATH ของเทอร์มินัลปัจจุบันให้ทันที จึงทำงานต่อได้รวดเดียว
+- ถ้าเครื่องยังไม่มี C++ Build Tools ตัวติดตั้งจะดาวน์โหลดให้ (~2–4 GB ครั้งเดียว) — รอบแรกจึงนานหน่อย
+
+> ติดตั้งไม่ผ่าน? ดู **[แก้ปัญหาการติดตั้ง](troubleshooting.md#แก้ปัญหาการติดตั้ง)**
+> — ครอบทุกอาการ (winget หาย, build fail, PATH ไม่อัปเดต, SmartScreen บล็อก) พร้อมวิธีแก้ทีละขั้น
+
+**ครั้งแรกเท่านั้น:** เปิดเทอร์มินัล**ใหม่** (ให้ PATH โหลดคำสั่ง `bagidea`/`claude`)
+แล้วรัน `claude` หนึ่งครั้งเพื่อ login บัญชี Claude จากนั้น:
 
 ```powershell
 bagidea start
 ```
+
+### ถ้าอยากติดตั้งเอง (manual)
+
+```powershell
+# 1) deps (ข้ามตัวที่มีแล้วได้)
+winget install Git.Git OpenJS.NodeJS.LTS Rustlang.Rustup
+winget install Microsoft.VisualStudio.2022.BuildTools --override `
+  "--quiet --wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+npm install -g @anthropic-ai/claude-code
+# 2) เปิดเทอร์มินัลใหม่ แล้วโคลน + build
+git clone https://github.com/bagidea/bagidea-office.git "$env:LOCALAPPDATA\BagIdeaOffice\app"
+cd "$env:LOCALAPPDATA\BagIdeaOffice\app\shell"; cargo build --release
+# 3) ดาวน์โหลด Godot 4.6.3 (win64) วางไว้ แล้วตั้ง env BAGIDEA_GODOT ชี้ไปที่ exe
+```
+
+(ตัวติดตั้งบรรทัดเดียวด้านบนทำทั้งหมดนี้ให้อยู่แล้ว — manual ไว้สำหรับคนที่อยากคุมเอง)
 
 ## 2. สิ่งที่จะเกิดขึ้นตอนเปิด
 

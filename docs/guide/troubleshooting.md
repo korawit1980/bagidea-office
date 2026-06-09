@@ -1,5 +1,54 @@
 # แก้ปัญหาที่พบบ่อย
 
+## แก้ปัญหาการติดตั้ง
+
+ตัวติดตั้งออกแบบให้ "จบรวดเดียวบนเครื่องเปล่า" แต่บางเครื่องมีเงื่อนไขต่างกัน
+ด้านล่างคืออาการที่พบบ่อยทั้งหมด พร้อมวิธีแก้ — เกือบทุกอย่างแก้ได้ด้วยการ
+**เปิดเทอร์มินัลใหม่แล้วรันตัวติดตั้งซ้ำ** (รันซ้ำปลอดภัย ข้อมูลไม่หาย)
+
+**`irm ... | iex` แล้วขึ้น error เรื่อง execution policy**
+- รันด้วยบรรทัดนี้แทน:
+  ```powershell
+  powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/bagidea/bagidea-office/main/installer/install.ps1 | iex"
+  ```
+
+**ขึ้น `winget not found`**
+- Windows เก่ายังไม่มี winget — ติดตั้ง **App Installer** จาก Microsoft Store
+  (`https://apps.microsoft.com/detail/9nblggh4nns1`) แล้วเปิดเทอร์มินัลใหม่ รันซ้ำ
+
+**ลง Git/Node เสร็จแต่ขึ้นว่า `git`/`node` ไม่พบ ตอนรันต่อ**
+- winget เขียน PATH ลง registry แต่เทอร์มินัลเดิมยังไม่เห็น — ตัวติดตั้งดึง PATH
+  ใหม่ให้แล้วในรอบเดียว แต่ถ้ายังเจอ ให้**ปิดเทอร์มินัลแล้วเปิดใหม่ รันซ้ำ** หายแน่นอน
+
+**`BUILD FAILED` / `cargo build` ขึ้น `error: linker 'link.exe' not found` หรือ `link.exe returned exit code`**
+- นี่คืออาการที่พบบ่อยที่สุด: Rust ต้องใช้ **C++ linker** ของ Visual Studio
+- ตัวติดตั้งเวอร์ชันนี้ลง **VS C++ Build Tools** ให้อัตโนมัติ แต่ถ้ารอบนั้นข้ามไป/ลงไม่ครบ
+  ลงเองด้วย:
+  ```powershell
+  winget install Microsoft.VisualStudio.2022.BuildTools --override "--quiet --wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+  ```
+  หรือเปิด **Visual Studio Installer** → Modify → ติ๊ก **Desktop development with C++** → Install
+- เสร็จแล้ว **เปิดเทอร์มินัลใหม่** (ให้ตัวแปร build แวดล้อมโหลด) แล้วรันตัวติดตั้งซ้ำ
+
+**`cargo`/`rustup` ไม่พบ หลังเพิ่งลง Rust**
+- เปิดเทอร์มินัลใหม่ หรือรันชั่วคราว: `$env:Path += ";$env:USERPROFILE\.cargo\bin"` แล้วรันซ้ำ
+
+**ดาวน์โหลด Godot ค้าง/ล้มเหลว**
+- ปัญหาเครือข่าย/ไฟร์วอลล์ระหว่างโหลดไฟล์จาก GitHub releases — เช็คเน็ตแล้วรันซ้ำ
+  (ตัวติดตั้งจะข้ามขั้นที่เสร็จแล้ว ดาวน์โหลดเฉพาะที่ยังขาด)
+
+**SmartScreen / Defender บล็อกสคริปต์หรือ exe**
+- สคริปต์เป็น open-source อ่านได้ที่ repo — กด **More info → Run anyway**
+  หรือดาวน์โหลด `install.ps1` มาอ่านก่อนแล้วรันเอง
+
+**build สำเร็จแต่พิมพ์ `bagidea` ไม่เจอ**
+- คำสั่งเพิ่งถูกเติมเข้า PATH — **เปิดเทอร์มินัลใหม่** แล้วลองอีกครั้ง
+  (หรือเปิดจาก Start Menu → "BagIdea Office")
+
+**อยากเริ่มใหม่ทั้งหมด**
+- ลบ `%LOCALAPPDATA%\BagIdeaOffice` แล้วรันตัวติดตั้งใหม่ (ข้อมูลในนั้นจะหายด้วย —
+  สำรอง `app\daemon\*.json` ไว้ก่อนถ้าต้องการเก็บ registry/sessions)
+
 ## โปรแกรม / วอลเปเปอร์
 
 **เปิดแล้วไม่มีอะไรเกิดขึ้น / วอลเปเปอร์ไม่เปลี่ยน**

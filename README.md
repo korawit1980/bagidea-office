@@ -205,16 +205,21 @@ Three independent processes: the **daemon** keeps agents running even if renderi
 
 ### One-shot installer (recommended)
 
-Installs every dependency (Git, Node LTS, Rust, Godot 4.6.3, Claude Code CLI),
-clones the app to `%LOCALAPPDATA%\BagIdeaOffice`, builds it, wires the
-`bagidea` command into your PATH and creates a Start Menu shortcut:
+On a **bare machine** it installs everything needed — Git, Node LTS, Rust, the
+**Visual Studio C++ Build Tools** (the Rust linker, and the most common reason a
+build fails), Godot 4.6.3 and the Claude Code CLI — then clones the app to
+`%LOCALAPPDATA%\BagIdeaOffice`, builds the shell, brands the window icon, wires the
+`bagidea` command into your PATH and creates a Start Menu shortcut. Freshly
+installed tools are pulled onto the current PATH so it finishes in one pass:
 
 ```powershell
 irm https://raw.githubusercontent.com/bagidea/bagidea-office/main/installer/install.ps1 | iex
 ```
 
-> First time only: run `claude` once in a new terminal to log in to Claude,
-> then `bagidea start`. Safe to re-run — each step skips what already exists.
+> First time only: open a **new** terminal, run `claude` once to log in to Claude,
+> then `bagidea start`. Safe to re-run — a re-run does a `git pull` and your data is kept.
+> Install didn't finish? See **[troubleshooting → install](docs/guide/troubleshooting.md#แก้ปัญหาการติดตั้ง)**
+> (covers winget, the C++ Build Tools / linker error, PATH, SmartScreen).
 
 ### Manual
 

@@ -165,6 +165,10 @@ footer .col a { display:block; padding:3px 0; }
 .doc p { color:#c7d2e2; margin:10px 0; }
 .doc ul, .doc ol { margin:10px 0; padding-inline-start:24px; color:#c7d2e2; }
 .doc li { margin:6px 0; }
+.fixlist { list-style:none; padding-inline-start:0 !important; }
+.fixlist li { background:rgba(255,255,255,.025); border:1px solid var(--line); border-radius:10px; padding:10px 14px; margin:8px 0; }
+.fixlist b { color:var(--accent); }
+.fixlist code { display:inline-block; margin-top:4px; word-break:break-all; }
 .doc img { border-radius:12px; border:1px solid var(--line2); margin:18px 0; box-shadow:0 18px 50px rgba(0,0,0,.45); }
 .doc table { width:100%; border-collapse:collapse; margin:16px 0; font-size:14px; }
 .doc th, .doc td { text-align:start; padding:9px 12px; border:1px solid var(--line); vertical-align:top; }
