@@ -201,11 +201,21 @@ function latestSession(agent) {
 }
 
 // Plain headless claude call → final text (prompt drafting, reflections).
-function claudeText(prompt) {
+function claudeText(prompt, opts = {}) {
   return new Promise((resolve) => {
-    const child = spawn("claude", ["-p"], {
+    // opts.tools: a comma string of allowed tools. With it, the meeting agent
+    // can look real things up (WebSearch/WebFetch/Read…). The broker settings
+    // ride along so anything OUTSIDE the allowed set still asks the owner to
+    // allow — same flow as a real task, just only when genuinely needed.
+    const args = ["-p"];
+    if (opts.tools) {
+      args.push("--allowedTools", opts.tools,
+        "--settings", path.join(WORKSPACE, ".claude", "settings.json"));
+    }
+    const child = spawn("claude", args, {
       cwd: WORKSPACE, shell: true,
-      env: { ...process.env, ...(reg.apiKeys || {}), OFFICE_ADAPTER: "1" },
+      env: { ...process.env, ...(reg.apiKeys || {}), OFFICE_ADAPTER: "1",
+        ...(opts.env || {}) },
     });
     child.stdin.write(prompt);
     child.stdin.end();
@@ -1862,12 +1872,19 @@ async function runDiscussion(ids, topic, rounds, social) {
           (transcript ? `Discussion so far:\n${transcript}\n` : "You open the meeting.\n") +
           `Give YOUR next contribution as ${a.name}: concrete, build on the others, ` +
           `max 3 sentences, plain text only, in the same language as the topic.` +
+          `\nถ้าจำเป็นต้องใช้ข้อมูลจริงเพื่อให้ความเห็นแน่นขึ้น คุณค้นเองได้ ` +
+          `(WebSearch / WebFetch / Read) — เฉพาะตอนที่จำเป็นจริงๆ เท่านั้น ไม่ต้องค้นพร่ำเพรื่อ ` +
+          `และตอบกลับเป็นข้อความสนทนาตามปกติ.` +
           (social ? `\nถ้าการคุยตกผลึกเป็นไอเดียโปรเจคที่ทีมอยากสร้างจริง ให้เพิ่มบรรทัดสุดท้าย:\n` +
             `PROPOSAL: <ชื่อโปรเจค> :: <ทำอะไร สั้นๆ>\n` +
             `(ใช้เฉพาะเมื่อไอเดียชัดและคุ้มจริง — เจ้าของจะเป็นคนอนุมัติ).\n` +
-            `กติกาสำคัญ: โปรเจคต้องเป็นงานสร้างสรรค์อิสระ หรือถ้าอยากต่อยอดกับตัวโปรแกรม ` +
-            `BagIdea Office ให้เสนอเป็น "plugin" เท่านั้น (ดู docs/guide/plugins.md) — ` +
-            `ห้ามเสนอแก้ไขระบบหลัก (daemon/godot/shell) ตรงๆ เพราะจะทำให้โปรแกรมพัง` : ""));
+            `อย่าคิดแค่เล็กๆ — นอกจาก plugin เล็กๆ ทีมคิดการใหญ่ได้: เว็บไซต์จริงจัง, เว็บแอป, ` +
+            `โปรแกรมหรือเครื่องมือที่จริงจัง หรือชิ้นงานสร้างสรรค์ที่ทะเยอทะยาน (เป็นโปรเจคอิสระใน workspace). ` +
+            `เลือกขนาดให้เหมาะกับไอเดีย.\n` +
+            `กติกาความปลอดภัยข้อเดียว: ถ้าจะต่อยอดกับตัวโปรแกรม BagIdea Office เองให้เสนอเป็น ` +
+            `"plugin" เท่านั้น (ดู docs/guide/plugins.md) — ห้ามแก้ระบบหลัก (daemon/godot/shell) ตรงๆ ` +
+            `เพราะจะทำให้โปรแกรมพัง. นอกเหนือจากนั้นเป็นโปรเจคอิสระได้เต็มที่` : ""),
+          { tools: "WebSearch,WebFetch,Read,Glob,Grep", env: { OFFICE_AGENT: id, OFFICE_TASK: task } });
         let line = text.split("\n").filter(Boolean).join(" ").slice(0, 500);
         // PROPOSAL: a project pitch for the owner to approve — protocol, not prose.
         const pm = text.match(/PROPOSAL:\s*([^:]+?)\s*::\s*(.+)/);
