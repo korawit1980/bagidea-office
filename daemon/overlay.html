@@ -2968,7 +2968,11 @@
     box.innerHTML =
       `<div class="statgrid">
         ${card("⚡", "งานวันนี้", today.runs, `✓ ${today.done} · ✗ ${today.failed}`)}
-        ${card("💰", "ค่าใช้จ่ายวันนี้", "$" + (today.cost || 0).toFixed(2), "Claude API")}
+        ${(() => { const g = (today.aux && today.aux.gemini) || 0, o = (today.aux && today.aux.openai) || 0, c = today.cost || 0;
+          return card("💰", "Claude วันนี้", "$" + c.toFixed(2), "ค่าจริงจาก Claude API")
+            + card("✨", "Gemini วันนี้", "≈ $" + g.toFixed(3), "ประมาณการ (TTS/ภาพ/แปล)")
+            + card("🤖", "OpenAI วันนี้", "≈ $" + o.toFixed(3), "ประมาณการ (เสียง/ภาพ)")
+            + card("🧾", "รวมวันนี้", "≈ $" + (c + g + o).toFixed(2), "Claude + Gemini + OpenAI"); })()}
         ${card("⏱", "เปิดมาแล้ว", up(s.uptimeSec), `${s.clients} จอเชื่อมต่อ`)}
         ${card("📋", "งานตั้งเวลา", s.jobs, `${s.events} นัดหมาย · ${s.notes} โน้ต`)}
         ${card("📁", "โปรเจค", s.projects.length, s.projects.filter((p) => p.ai).length + " มี AI ทำงาน")}
