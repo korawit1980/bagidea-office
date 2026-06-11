@@ -4,6 +4,40 @@ All notable changes to BagIdea Office. A **release** is a deliberate `VERSION`
 bump on `main` (see [RELEASING.md](RELEASING.md)) — that's what triggers the
 in-app 🔄 update banner. Versions follow [semver](https://semver.org).
 
+## [0.7.2] — Media, project fixes, a livelier office
+
+**Added**
+- **Open chat media in a real window / its folder.** Every image & file in chat
+  now has **⤢** (open in a separate, resizable window — the OS viewer/player) and
+  **📂** (reveal in the file manager). Click an image for a quick in-app preview,
+  or ⤢ for the big window.
+- **Search box on the projects list** (OFFICE OPS → Projects) — find a project
+  fast as the list grows.
+- **Server-room emergencies 🔥.** The server room now occasionally blows up /
+  catches fire and an agent **sprints over to put it out** — a little drama that
+  finally gives the room a purpose.
+
+**Fixed**
+- **Audio & video now play (and seek) in chat** — media is served with HTTP Range,
+  which Chromium/WebView2 needs for `<video>`; before, clips often wouldn't play.
+- **Project ⏹ Stop now really closes the work window.** It used to leave the
+  window lingering so the project looked "still open" and any click re-flagged it
+  as active.
+- **The 📂 open-folder button works** (it was passing the path to Explorer wrong).
+- **Shadows cleaned up** — the hard, jagged, striping/cut-off look is gone
+  (orthogonal shadows sized to the room, higher-res map, tuned bias).
+- **The projects list stops jumping to the top** every time a status icon
+  changes — it remembers your scroll position (and your search).
+
+**Changed**
+- **Agents aim for useful work, not junk.** The team now builds genuinely useful
+  plugins/apps (no more throwaway-plugin spam), is more selective, and explains
+  proposals in enough detail for you to decide.
+- **The chase/tag game actually sprints** room-to-room now (you'll see it), with
+  effects — instead of a barely-visible shuffle.
+
+**Removed** — nothing.
+
 ## [0.7.1] — Voice input fix + audio device settings
 
 **Fixed**
@@ -124,6 +158,7 @@ behavior if anything goes wrong.
 
 *Earlier history predates this changelog — see `git log` for the full record.*
 
+[0.7.2]: https://github.com/bagidea/bagidea-office/releases/tag/v0.7.2
 [0.7.1]: https://github.com/bagidea/bagidea-office/releases/tag/v0.7.1
 [0.7.0]: https://github.com/bagidea/bagidea-office/releases/tag/v0.7.0
 [0.6.4]: https://github.com/bagidea/bagidea-office/releases/tag/v0.6.4
