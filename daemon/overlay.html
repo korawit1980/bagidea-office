@@ -545,11 +545,15 @@
      grows with the message up to a cap then scrolls — never a cramped one-liner. */
   footer #inp {
     flex: 1; min-width: 0; font: inherit; color: var(--text); background: rgba(255,255,255,0.05);
-    border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; outline: none;
-    resize: none; line-height: 1.45; max-height: 132px; overflow-y: hidden;
-    overflow-wrap: break-word; word-break: break-word; height: 38px;
+    border: 1px solid var(--line); border-radius: 11px; padding: 7px 12px; outline: none;
+    resize: none; line-height: 1.4; max-height: 128px; overflow-y: hidden;
+    overflow-wrap: break-word; word-break: break-word; height: 34px;
   }
   footer #inp:focus { border-color: var(--accent); }
+  /* The resting hint is small + subtle so the empty box stays compact; what you
+     TYPE is full-size. (Mini window shrinks the hint a touch more.) */
+  footer #inp::placeholder, .assistrow textarea::placeholder { font-size: 11px; opacity: 0.65; }
+  @media (max-width: 480px), (max-height: 460px) { footer #inp::placeholder { font-size: 10px; } }
   /* compact square icon buttons so they never crowd out the message box */
   footer .send {
     flex: none; width: 34px; height: 34px; padding: 0; font-size: 15px; cursor: pointer;
@@ -802,7 +806,7 @@
 <div id="threadBar">🧵 thread: <b id="threadName">ล่าสุด (ต่อเนื่องอัตโนมัติ)</b></div>
 <div id="attachRow"></div>
 <footer>
-  <textarea id="inp" rows="1" placeholder="Message Main… (Enter to send · Shift+Enter = new line)"
+  <textarea id="inp" rows="1" placeholder="Message Main…   ⏎ send · ⇧⏎ new line"
             autofocus autocomplete="off" spellcheck="false"></textarea>
   <input id="filePick" type="file" multiple style="display:none">
   <button class="send" id="attachBtn" title="แนบไฟล์ (หรือลากมาวางได้เลย)">📎</button>
@@ -1166,8 +1170,8 @@
     document.getElementById("compRole").textContent = roleOf(id);
     body(document.getElementById("compBody"), id);
     document.getElementById("inp").placeholder = id === "ceo"
-      ? `สั่งงานในนาม CEO… (Enter ส่ง · Shift+Enter ขึ้นบรรทัดใหม่)`
-      : `Message ${nameOf(id)}… (Enter to send · Shift+Enter = new line)`;
+      ? `สั่งงานในนาม CEO…   ⏎ ส่ง · ⇧⏎ บรรทัดใหม่`
+      : `Message ${nameOf(id)}…   ⏎ send · ⇧⏎ new line`;
     // 📞 calling is for the MAIN agent only (it speaks for the office).
     // The realtime call always reaches the main agent — offer it from the CEO seat too.
     document.getElementById("liveBtn").style.display = (id === "main" || id === "ceo") ? "" : "none";
@@ -3057,7 +3061,7 @@
     } else if (tab === "notes") {
       body = `<div id="nlist"></div>
         <div class="assistrow" style="margin-top:10px">
-          <textarea id="nText" rows="1" placeholder="จดโน้ต… (Shift+Enter ขึ้นบรรทัดใหม่ · agents อ่าน/เขียนผ่าน notes.md ได้)" maxlength="500"></textarea>
+          <textarea id="nText" rows="1" placeholder="จดโน้ต…   ⏎ บันทึก · ⇧⏎ บรรทัดใหม่" maxlength="500"></textarea>
           <button class="send" id="nMic" title="พูดแทนพิมพ์">🎤</button>
           <button class="primary" id="nAdd">📝</button>
         </div>
@@ -4154,8 +4158,8 @@
     // empty box never has a phantom scrollbar from the placeholder).
     const grow = () => {
       box.style.height = "auto";
-      box.style.height = Math.min(box.scrollHeight, 132) + "px";
-      box.style.overflowY = box.scrollHeight > 132 ? "auto" : "hidden";
+      box.style.height = Math.min(box.scrollHeight, 128) + "px";
+      box.style.overflowY = box.scrollHeight > 128 ? "auto" : "hidden";
     };
     box.addEventListener("input", grow);
     grow();  // lock the correct one-row height up front
