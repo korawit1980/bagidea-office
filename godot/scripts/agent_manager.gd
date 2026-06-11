@@ -67,8 +67,13 @@ func resnap_agents() -> void:
 		var a: Dictionary = agents[id]
 		if not is_instance_valid(a.node): continue
 		var home: String = String(a.get("desk", ""))
-		if home == "" or not world.WP.has(home): home = "ops_c"
-		if world.WP.has(home): a.node.teleport(world.WP[home])
+		if home != "" and world.WP.has(home):
+			a.node.teleport(world.WP[home])
+		else:
+			# No fixed desk (idle agents) → SPREAD them, never pile on ops_c.
+			# This also ran at boot (layout_loader → apply_room_order → resnap),
+			# which is what stacked everyone in one room on launch.
+			a.node.teleport(_spawn_base(id))
 	if is_instance_valid(ceo) and world.WP.has("ceo_desk"):
 		ceo.teleport(world.WP["ceo_desk"])
 
@@ -683,22 +688,31 @@ func _route_hook_to_ghost(id: String, type: String, evt: Dictionary) -> void:
 
 # ---------------------------------------------------------------- agents
 
-## A spread-out spawn spot so agents don't all pile onto the lobby door at boot.
-## Shuffled once, then handed out in order across the office rooms (never exec).
-var _spawn_pool: Array = []
+## A spread-out spawn POSITION so agents don't all pile up at boot. Returns
+## shuffled room anchors when they're ready; if the waypoint table isn't built
+## yet (a boot race that put everyone on "ops_c"), it still SPREADS them across
+## the floor interior so it's never a single pile.
+var _spawn_pool: Array = []   # Array[Vector3]
 var _spawn_n := 0
-func _spawn_spot() -> String:
+func _spawn_base(id: String) -> Vector3:
+	# main works in the exec office; everyone else fans out across the rooms.
+	if id == "main" and world.WP.has("exec_c"):
+		return world.WP["exec_c"]
 	if _spawn_pool.is_empty():
 		for w in ["cafe_s1", "cafe_s2", "cafe_c", "rec_s1", "rec_s2", "rec_s3", "rec_s4",
-				"rec_c", "m_s1", "m_s2", "m_s3", "m_s4", "ops_c", "server_c", "lobby_c"]:
+				"rec_c", "m_s1", "m_s2", "m_s3", "m_s4", "ops_c", "server_c", "lobby_c",
+				"desk1", "desk2", "desk3", "desk4"]:
 			if world.WP.has(w):
-				_spawn_pool.append(w)
+				_spawn_pool.append(world.WP[w])
 		_spawn_pool.shuffle()
-	if _spawn_pool.is_empty():
-		return "ops_c"
-	var s: String = _spawn_pool[_spawn_n % _spawn_pool.size()]
+	if not _spawn_pool.is_empty():
+		var p: Vector3 = _spawn_pool[_spawn_n % _spawn_pool.size()]
+		_spawn_n += 1
+		return p
+	# waypoints not ready → spread across the floor interior (never a pile)
 	_spawn_n += 1
-	return s
+	var h: Vector2 = world.floor_half() if world.has_method("floor_half") else Vector2(14.0, 10.0)
+	return Vector3(randf_range(-h.x + 2.0, h.x - 2.0), 0.86, randf_range(-h.y + 2.0, h.y - 2.0))
 
 func _ensure(id: String) -> Dictionary:
 	if agents.has(id):
@@ -711,12 +725,8 @@ func _ensure(id: String) -> Dictionary:
 	# Spawn already SPREAD across the rooms (main in the exec office; everyone
 	# else at a distributed room spot) so they don't stack on the door at boot.
 	var node := _make_char(id)
-	var spot := "exec_c" if id == "main" else _spawn_spot()
-	if not world.WP.has(spot):
-		spot = "ops_c" if world.WP.has("ops_c") else "spawn"
-	var base: Vector3 = world.WP.get(spot, world.WP.get("spawn", Vector3.ZERO))
-	# small scatter so two agents in the same room still don't overlap
-	node.position = base + Vector3(randf_range(-0.7, 0.7), 0, randf_range(-0.7, 0.7))
+	# spread across the rooms (small scatter so same-room agents don't overlap)
+	node.position = _spawn_base(id) + Vector3(randf_range(-0.7, 0.7), 0, randf_range(-0.7, 0.7))
 	get_parent().add_child(node)
 	node.set_status(id)
 	var a := {"node": node, "state": "idle", "desk": "", "bed": "", "id": id, "tasks": {}}
