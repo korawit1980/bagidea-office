@@ -17,9 +17,10 @@
     box-shadow:0 0 8px rgba(94,200,255,0.6); flex:none; }
   #bar .ti { font-size:12.5px; font-weight:600; flex:1; white-space:nowrap;
     overflow:hidden; text-overflow:ellipsis; letter-spacing:0.2px; }
-  #x { width:26px; height:26px; border:none; border-radius:7px; background:transparent;
-    color:#9fb3c8; font-size:14px; cursor:pointer; flex:none; }
-  #x:hover { background:#e0443a; color:#fff; }
+  .wbtn { width:26px; height:26px; border:none; border-radius:7px; background:transparent;
+    color:#9fb3c8; font-size:14px; cursor:pointer; flex:none; line-height:1; }
+  .wbtn:hover { background:rgba(255,255,255,0.10); color:#fff; }
+  .wbtn.close:hover { background:#e0443a; color:#fff; }
   #f { width:100%; height:calc(100% - 34px); border:none; display:block; background:var(--bg); }
 </style>
 </head>
@@ -27,7 +28,9 @@
   <div id="bar">
     <span class="dot"></span>
     <span class="ti" id="ti">BagIdea Office</span>
-    <button id="x" title="ปิด">✕</button>
+    <button class="wbtn" id="min" title="พัก (ย่อลงทาสก์บาร์)">—</button>
+    <button class="wbtn" id="max" title="ขยาย / คืนขนาด">▢</button>
+    <button class="wbtn close" id="x" title="ปิด">✕</button>
   </div>
   <iframe id="f" allow="autoplay; microphone; clipboard-read; clipboard-write"></iframe>
 <script>
@@ -40,10 +43,19 @@
   // Drag the frameless OS window by the bar (the shell does the real drag).
   const bar = document.getElementById("bar");
   bar.addEventListener("mousedown", (e) => {
-    if (e.target.id === "x" || e.button !== 0) return;
+    if (e.target.closest(".wbtn") || e.button !== 0) return;  // buttons aren't drag
     post("win-drag");
   });
   document.getElementById("x").onclick = () => post("win-close");
+  document.getElementById("min").onclick = () => post("win-min");
+  const maxBtn = document.getElementById("max");
+  // Only resizable windows get a maximize/restore button (fixed tools hide it).
+  if (q.get("resizable") === "0") maxBtn.style.display = "none";
+  else { maxBtn.onclick = () => post("win-max"); maxBtn.ondblclick = () => post("win-max"); }
+  // Double-click the bar to maximize/restore (standard), when allowed.
+  if (q.get("resizable") !== "0") bar.addEventListener("dblclick", (e) => {
+    if (!e.target.closest(".wbtn")) post("win-max");
+  });
   const f = document.getElementById("f");
   f.src = src;
   // Same-origin: give the embedded content the office's slim themed scrollbar.

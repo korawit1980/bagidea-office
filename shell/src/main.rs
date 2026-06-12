@@ -53,6 +53,8 @@ enum UserEvent {
     OpenWindow(String), // pop a custom-chrome window onto a daemon URL (plugin / viewer)
     PopupDrag(tao::window::WindowId),  // a pop-out's title bar is being dragged
     PopupClose(tao::window::WindowId), // a pop-out asked to close itself
+    PopupMin(tao::window::WindowId),   // minimize (พัก)
+    PopupMax(tao::window::WindowId),   // toggle maximize / restore
 }
 
 // Run a child process without flashing a console window (Windows); a no-op
@@ -1482,6 +1484,8 @@ fn main() {
                                     let _ = match req.body().as_str() {
                                         "win-drag" => pproxy.send_event(UserEvent::PopupDrag(id)),
                                         "win-close" => pproxy.send_event(UserEvent::PopupClose(id)),
+                                        "win-min" => pproxy.send_event(UserEvent::PopupMin(id)),
+                                        "win-max" => pproxy.send_event(UserEvent::PopupMax(id)),
                                         _ => Ok(()),
                                     };
                                 }))
@@ -1499,6 +1503,16 @@ fn main() {
                 }
                 UserEvent::PopupClose(id) => {
                     popups.retain(|(i, _, _, _)| *i != id);
+                }
+                UserEvent::PopupMin(id) => {
+                    if let Some((_, _, win, _)) = popups.iter().find(|(i, _, _, _)| *i == id) {
+                        win.set_minimized(true);
+                    }
+                }
+                UserEvent::PopupMax(id) => {
+                    if let Some((_, _, win, _)) = popups.iter().find(|(i, _, _, _)| *i == id) {
+                        win.set_maximized(!win.is_maximized());
+                    }
                 }
             },
             _ => {}
