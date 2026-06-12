@@ -4433,7 +4433,7 @@
     return wrap;
   }
   // Agent replies that mention media files get inline previews.
-  const MEDIA_RE = /((?:[A-Za-z]:\\|\/uploads\/)[^\s"'`<>|?*]+?\.(?:png|jpe?g|gif|webp|bmp|mp4|webm|mp3|wav|m4a|ogg))/gi;
+  const MEDIA_RE = /((?:[A-Za-z]:[\\/]|\/uploads\/|\/(?:Users|home|Volumes)\/)[^\s"'`<>|?*]+?\.(?:png|jpe?g|gif|webp|bmp|mp4|webm|mp3|wav|m4a|ogg))/gi;
   function attachMediaPreviews(d, text) {
     const seen = new Set();
     for (const m of String(text).matchAll(MEDIA_RE)) {
