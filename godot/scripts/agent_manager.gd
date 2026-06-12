@@ -195,10 +195,13 @@ func handle(evt: Dictionary) -> void:
 		_fetch_i18n()
 		return
 	if type == "ui.visibility":
-		# Office hidden: silence + crawl the renderer; agents keep WORKING.
+		# "Hide office" hides ONLY the overlay UI — the wallpaper is still the
+		# live desktop background, so it must keep rendering smoothly. Crawling
+		# to 2 FPS made the still-visible wallpaper stutter badly; keep it at the
+		# normal wallpaper rate. We only mute sound while hidden.
 		var on := bool(evt.get("on", true))
 		Sfx.hidden = not on
-		Engine.max_fps = 30 if on else 2
+		Engine.max_fps = 30
 		return
 	if type.begins_with("ui."):
 		return  # overlay debug beacons aren't agents
