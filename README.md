@@ -60,16 +60,31 @@ BagIdea Office is updated **constantly** — every office gets a 🔄 banner and
 
 ## 💛 Sponsors
 
-BagIdea Office is built in the open and kept free to run. These sponsors make that possible — **thank you** 🙏
+BagIdea Office is built in the open and kept free to run. Sponsors make that possible — **thank you** 🙏
+
+### 👑 Gold Partners
 
 <p align="center">
   <a href="https://www.warrix.co.th" target="_blank">
     <img src="docs/img/sponsors/warrix.png" alt="WARRIX — Gold Partner" height="110">
   </a>
 </p>
-<p align="center"><b>👑 Gold Partner — <a href="https://www.warrix.co.th">WARRIX</a></b></p>
+<p align="center"><b><a href="https://www.warrix.co.th">WARRIX</a></b></p>
 
-Want your brand here and in the app's credits? **[Become a sponsor →](mailto:wrxbgid@warrix.co.th?subject=BagIdea%20Office%20Sponsorship)**
+<!-- 🥈 Silver Partners / 🥉 Bronze · Backers / 💛 Supporters appear here as they join. -->
+
+### Tiers
+
+| Tier | From | You get |
+|------|------|---------|
+| 👑 **Gold Partner** | **$3,000+/mo** | Large logo on the [website](https://bagidea.com) & in-app credits · top placement · roadmap input & early builds · shout-out in release notes |
+| 🥈 **Silver Partner** | **$300+/mo** | Logo on the website · mention in release notes · early access to builds |
+| 🥉 **Bronze / Backer** | **$30+/mo** | Logo or name on the supporters wall · a link to your site or socials · our heartfelt thanks |
+| 💛 **Supporter** | **any amount/mo** | Your name on the supporters wall · a link to your site or socials |
+
+Every sponsor — at any tier — gets a clickable link to their site or socials, and is shown on the website (sorted by contribution, amounts never displayed).
+
+**[💖 Sponsor on GitHub →](https://github.com/sponsors/bagidea)** · or **[email us →](mailto:wrxbgid@warrix.co.th?subject=BagIdea%20Office%20Sponsorship)** to talk.
 
 ---
 

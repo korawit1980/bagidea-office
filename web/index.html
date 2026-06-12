@@ -12,6 +12,7 @@
 <link rel="icon" href="img/logo.png">
 <link rel="stylesheet" href="assets/site.css">
 <script defer src="assets/i18n.js"></script>
+<script defer src="assets/sponsors.js"></script>
 </head>
 <body>
 
@@ -186,20 +187,25 @@
 
     <!-- Honored sponsors — real logos, full thanks -->
     <p class="sp-thanks" data-i18n="sp_thanks">Proudly backed by</p>
-    <div class="sponsor-wall">
-      <a class="sp-logo gold" href="https://www.warrix.co.th" target="_blank" rel="noopener" title="WARRIX — Gold Partner 🙏">
-        <img src="img/sponsors/warrix.png" alt="WARRIX — Gold Partner">
-        <span class="sp-badge">👑 Gold Partner</span>
-      </a>
+    <!-- Filled from sponsors.json by assets/sponsors.js. The markup below is the
+         no-JS fallback (and what JS replaces). -->
+    <div class="sponsor-wall" id="sponsorWall">
+      <div class="sp-row sp-row-gold">
+        <a class="sp-logo gold" href="https://www.warrix.co.th" target="_blank" rel="noopener" title="WARRIX — Gold Partner 🙏">
+          <img src="img/sponsors/warrix.png" alt="WARRIX — Gold Partner" loading="lazy">
+          <span class="sp-badge">👑 Gold Partner</span>
+        </a>
+      </div>
     </div>
 
     <div class="tiers">
       <div class="tier gold">
         <div class="crown">👑</div>
         <h3 data-i18n="sp_gold_t">Gold Partner</h3>
+        <p class="price" data-i18n="sp_gold_p">$3,000+ / mo</p>
         <ul>
-          <li data-i18n="sp_gold_1">Logo on the site &amp; in-app credits</li>
-          <li data-i18n="sp_gold_2">Top placement, largest size</li>
+          <li data-i18n="sp_gold_1">Large logo on the site &amp; in-app credits</li>
+          <li data-i18n="sp_gold_2">Top placement, largest size + glow badge</li>
           <li data-i18n="sp_gold_3">Roadmap input &amp; early builds</li>
           <li data-i18n="sp_gold_4">Shout-out in release notes</li>
         </ul>
@@ -207,6 +213,7 @@
       <div class="tier">
         <div class="crown">🥈</div>
         <h3 data-i18n="sp_silver_t">Silver Partner</h3>
+        <p class="price" data-i18n="sp_silver_p">$300+ / mo</p>
         <ul>
           <li data-i18n="sp_silver_1">Logo on the website</li>
           <li data-i18n="sp_silver_2">Mention in release notes</li>
@@ -216,10 +223,21 @@
       <div class="tier">
         <div class="crown">🥉</div>
         <h3 data-i18n="sp_bronze_t">Bronze / Backer</h3>
+        <p class="price" data-i18n="sp_bronze_p">$30+ / mo</p>
         <ul>
-          <li data-i18n="sp_bronze_1">Name on the supporters list</li>
-          <li data-i18n="sp_bronze_2">Our heartfelt thanks</li>
-          <li data-i18n="sp_bronze_3">A good-karma boost</li>
+          <li data-i18n="sp_bronze_1">Logo or name on the supporters wall</li>
+          <li data-i18n="sp_bronze_2">A link to your site or socials</li>
+          <li data-i18n="sp_bronze_3">Our heartfelt thanks</li>
+        </ul>
+      </div>
+      <div class="tier">
+        <div class="crown">💛</div>
+        <h3 data-i18n="sp_supporter_t">Supporter</h3>
+        <p class="price" data-i18n="sp_supporter_p">Any amount / mo</p>
+        <ul>
+          <li data-i18n="sp_supporter_1">Your name on the supporters wall</li>
+          <li data-i18n="sp_supporter_2">A link to your site or socials</li>
+          <li data-i18n="sp_supporter_3">A good-karma boost 💛</li>
         </ul>
       </div>
     </div>

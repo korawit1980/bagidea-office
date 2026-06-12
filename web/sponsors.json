@@ -1,0 +1,19 @@
+{
+  "_comment": "Single source of truth for the sponsor wall on the website (and a mirror in README). Sorted by tier (gold > silver > bronze > supporter), then by `weight` descending WITHIN a tier. `weight` is a private sort key (never displayed) — you may set it to the monthly amount or any relative number; the public site never shows the figure. Tier is derived purely from this list, not from `weight`, so you stay in control. `logo` is optional: a sponsor with no logo renders as a name chip with their link. To add a sponsor: drop one object in `sponsors[]` and (when logos are used) put the image under web/img/sponsors/. Later this file can be auto-generated from the GitHub Sponsors API by a scheduled GitHub Action — the schema stays the same.",
+  "tiers": {
+    "gold":      { "label": "Gold Partner",   "min": 3000 },
+    "silver":    { "label": "Silver Partner", "min": 300 },
+    "bronze":    { "label": "Bronze / Backer", "min": 30 },
+    "supporter": { "label": "Supporter",      "min": 1 }
+  },
+  "sponsors": [
+    {
+      "name": "WARRIX",
+      "tier": "gold",
+      "weight": 3000,
+      "url": "https://www.warrix.co.th",
+      "logo": "img/sponsors/warrix.png",
+      "since": "2026-05"
+    }
+  ]
+}
