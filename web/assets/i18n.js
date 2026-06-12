@@ -63,7 +63,7 @@ const I18N = {
     sp_silver_t:"Silver Partner", sp_silver_p:"$300+ / mo", sp_silver_1:"Logo on the website", sp_silver_2:"Mention in release notes", sp_silver_3:"Early access to builds",
     sp_bronze_t:"Bronze / Backer", sp_bronze_p:"$30+ / mo", sp_bronze_1:"Logo or name on the supporters wall", sp_bronze_2:"A link to your site or socials", sp_bronze_3:"Our heartfelt thanks",
     sp_supporter_t:"Supporter", sp_supporter_p:"Any amount / mo", sp_supporter_1:"Your name on the supporters wall", sp_supporter_2:"A link to your site or socials", sp_supporter_3:"A good-karma boost 💛",
-    sp_cta:"Become a sponsor", sp_contact:"Reach out and let's talk →",
+    sp_cta:"💖 Sponsor on GitHub", sp_contact:"Prefer to talk first? Reach out →",
 
     foot_tag:"Your wallpaper goes to work.", foot_made:"Built with Claude Code.",
     foot_product:"Product", foot_resources:"Resources", foot_company:"Company",
@@ -304,7 +304,7 @@ const I18N = {
     sp_silver_t:"Silver Partner", sp_silver_p:"$300+ / เดือน", sp_silver_1:"โลโก้บนเว็บไซต์", sp_silver_2:"กล่าวถึงใน release notes", sp_silver_3:"เข้าถึง build ก่อนใคร",
     sp_bronze_t:"Bronze / ผู้สนับสนุน", sp_bronze_p:"$30+ / เดือน", sp_bronze_1:"โลโก้หรือชื่อบนกำแพงผู้สนับสนุน", sp_bronze_2:"ลิงก์ไปเว็บหรือโซเชียลของคุณ", sp_bronze_3:"คำขอบคุณจากใจ",
     sp_supporter_t:"Supporter", sp_supporter_p:"เท่าไหร่ก็ได้ / เดือน", sp_supporter_1:"ชื่อของคุณบนกำแพงผู้สนับสนุน", sp_supporter_2:"ลิงก์ไปเว็บหรือโซเชียลของคุณ", sp_supporter_3:"เพิ่มบุญกุศลให้คุณ 💛",
-    sp_cta:"เป็นสปอนเซอร์", sp_contact:"ติดต่อเราเพื่อพูดคุย →",
+    sp_cta:"💖 สนับสนุนผ่าน GitHub", sp_contact:"อยากคุยก่อน? ติดต่อเรา →",
 
     foot_tag:"วอลเปเปอร์ของคุณทำงานได้จริง", foot_made:"สร้างด้วย Claude Code",
     foot_product:"โปรดักต์", foot_resources:"แหล่งข้อมูล", foot_company:"บริษัท",

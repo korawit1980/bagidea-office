@@ -62,16 +62,20 @@ BagIdea Office is updated **constantly** — every office gets a 🔄 banner and
 
 BagIdea Office is built in the open and kept free to run. Sponsors make that possible — **thank you** 🙏
 
+<!-- sponsors:start -->
 ### 👑 Gold Partners
 
 <p align="center">
-  <a href="https://www.warrix.co.th" target="_blank">
-    <img src="docs/img/sponsors/warrix.png" alt="WARRIX — Gold Partner" height="110">
-  </a>
+  <a href="https://www.warrix.co.th" target="_blank"><img src="https://raw.githubusercontent.com/bagidea/bagidea-office/main/web/img/sponsors/warrix.png" height="110" alt="WARRIX"></a>
 </p>
 <p align="center"><b><a href="https://www.warrix.co.th">WARRIX</a></b></p>
 
-<!-- 🥈 Silver Partners / 🥉 Bronze · Backers / 💛 Supporters appear here as they join. -->
+### 💛 Supporters
+
+[Reuannamphung](https://www.facebook.com/Reuannamphung)
+<!-- sponsors:end -->
+
+> The block above auto-updates from GitHub Sponsors via `.github/workflows/sponsors.yml`. Off-platform sponsors live in `web/sponsors.manual.json`.
 
 ### Tiers
 
