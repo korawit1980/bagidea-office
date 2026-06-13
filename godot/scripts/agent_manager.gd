@@ -148,6 +148,9 @@ func _set_state(a: Dictionary, state: String) -> void:
 ## Occasional cinematic close-up on something interesting — rate-limited so
 ## the wallpaper keeps its calm diorama feel between shots.
 var _focus_cd := 0.0
+## Server-room blast is a rare treat — hard cooldown on top of its low roll so it
+## never clusters (was ~every 5 min; now 15-25 min apart at most).
+var _incident_cd := 0.0
 
 ## A guaranteed camera move for a fresh order: if the camera isn't already
 ## focusing, snap to `node` so the scene never sits dead-still while
@@ -1177,7 +1180,7 @@ func _idle_life_loop() -> void:
 			_act_cafe(a)           # cafe — still the biggest single share
 		elif r < 0.90:
 			_act_chat(a, pool)     # chat with a colleague (anywhere)
-		elif r < 0.96:
+		elif r < 0.99 or Time.get_ticks_msec() / 1000.0 < _incident_cd:
 			_act_explore(a)        # a rare peek at the server / meeting room
 		else:
 			_act_server_incident(a)  # 🔥 rare server-room emergency — agent rushes to fix
@@ -1324,6 +1327,7 @@ func _act_server_incident(a: Dictionary) -> void:
 		_act_explore(a)
 		return
 	var pos: Vector3 = world.WP["server_c"]
+	_incident_cd = Time.get_ticks_msec() / 1000.0 + randf_range(900.0, 1500.0)  # 15-25 min until the next one
 	# Point the camera at the server room FIRST — the blast used to fire wherever
 	# the camera happened NOT to be, so it was easy to miss. A temp marker gives
 	# the rig something to frame; we free it when the drama ends.
