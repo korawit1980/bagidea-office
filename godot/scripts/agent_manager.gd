@@ -497,6 +497,25 @@ func _apply_roster(evt: Dictionary) -> void:
 		if agents[id].get("registered", false) and not roster.has(id):
 			_remove_agent(id)
 
+## Issue #6 safety net: if the first roster.sync spawned staff before the world
+## was ready (so they never got a live body), the office would show only the CEO.
+## Re-ensure every registered teammate has a valid, in-tree node — cheap, runs
+## each idle tick, a no-op once everyone is present.
+func _reconcile_roster() -> void:
+	for rid in roster:
+		if rid == "ceo":
+			continue
+		var ex: Variant = agents.get(rid)
+		if ex != null and is_instance_valid(ex.get("node")) and ex.node.is_inside_tree():
+			continue
+		if ex != null and is_instance_valid(ex.get("node")):
+			ex.node.queue_free()
+		agents.erase(rid)
+		var na: Dictionary = _ensure(rid)
+		na.registered = true
+		na.node.apply_identity(roster[rid].name, roster[rid].role, roster[rid].avatar)
+		na.node.set_aura(roster[rid].aura)
+
 func _remove_agent(id: String) -> void:
 	if id == "" or id in ["main", "ceo"] or not agents.has(id):
 		return
@@ -1153,6 +1172,7 @@ func _end_supervision(id: String) -> void:
 func _idle_life_loop() -> void:
 	while is_inside_tree():
 		await get_tree().create_timer(randf_range(9.0, 16.0)).timeout
+		_reconcile_roster()  # issue #6 safety net — make sure every teammate has a live body
 		var pool: Array = []
 		for id in agents:
 			var a: Dictionary = agents[id]

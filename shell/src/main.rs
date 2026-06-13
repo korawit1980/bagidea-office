@@ -309,6 +309,9 @@ mod platform {
     // reach to fire PttKey(down/up) into the event loop.
     static PTT_VK: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0x75); // VK_F6
     static PTT_DOWN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    // True while the user has hidden the office from the tray — the re-pin
+    // watcher (issue #7) must NOT fight that by re-showing the window.
+    static WALLPAPER_HIDDEN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
     static PTT_PROXY: std::sync::Mutex<Option<tao::event_loop::EventLoopProxy<super::UserEvent>>> =
         std::sync::Mutex::new(None);
 
@@ -621,10 +624,37 @@ mod platform {
             // the target screen entirely).
             position_wallpaper(godot, &root);
             let _ = proxy.send_event(UserEvent::WorldReady);
+
+            // Re-pin watcher (issue #7): a desktop click can pop our window out
+            // of WorkerW (reparented or hidden), so the office vanishes until a
+            // manual Hide-toggle / restart. Re-assert parent + visibility when it
+            // drifts — cheap (a no-op while everything is fine).
+            use windows_sys::Win32::UI::WindowsAndMessaging::{GetParent, IsWindow};
+            loop {
+                std::thread::sleep(std::time::Duration::from_millis(1200));
+                if IsWindow(godot) == 0 {
+                    break; // renderer gone — stop watching
+                }
+                if WALLPAPER_HIDDEN.load(std::sync::atomic::Ordering::SeqCst) {
+                    continue; // user hid the office on purpose — leave it hidden
+                }
+                let mut ww: HWND = 0 as HWND;
+                EnumWindows(Some(find_workerw_cb), &mut ww as *mut HWND as _);
+                if ww == 0 as HWND {
+                    continue;
+                }
+                if GetParent(godot) != ww || IsWindowVisible(godot) == 0 {
+                    SetParent(godot, ww);
+                    ShowWindow(godot, SW_SHOW);
+                    position_wallpaper(godot, &root);
+                }
+            }
         });
     }
 
     pub fn hide_office(pid: u32, hidden: bool) {
+        // Tell the re-pin watcher to stand down while the user keeps it hidden.
+        WALLPAPER_HIDDEN.store(hidden, std::sync::atomic::Ordering::SeqCst);
         let g = find_wallpaper_hwnd(pid);
         if g != 0 as HWND {
             unsafe { ShowWindow(g, if hidden { SW_HIDE } else { SW_SHOW }); }
