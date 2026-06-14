@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tools Hub — BagIdea Office</title>
+<style>
+  :root { --bg:#0a111d; --card:#0e1626; --line:rgba(255,255,255,.10); --accent:#5ec8ff; --text:#e8eef6; --dim:#90a0b6; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; min-height:100%; background:var(--bg); color:var(--text);
+    font:13px/1.55 -apple-system,Segoe UI,Roboto,"Noto Sans Thai",sans-serif; }
+  ::-webkit-scrollbar { width:8px; } ::-webkit-scrollbar-thumb { background:rgba(94,200,255,.35); border-radius:8px; }
+  .wrap { max-width:760px; margin:0 auto; padding:18px 18px 40px; }
+  h1 { font-size:19px; margin:4px 0 2px; } .sub { color:var(--dim); margin:0 0 16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px 16px; margin-bottom:12px; }
+  .card .top { display:flex; align-items:center; gap:10px; }
+  .card .ic { font-size:22px; } .card h3 { margin:0; font-size:15px; flex:1; }
+  .pill { font-size:10.5px; padding:2px 8px; border-radius:999px; border:1px solid var(--line); color:var(--dim); white-space:nowrap; }
+  .pill.risk { color:#ffcf8a; border-color:rgba(255,180,90,.4); }
+  .pill.on { color:#67e8a0; border-color:rgba(103,232,160,.5); }
+  .card p { color:var(--dim); margin:8px 0; font-size:12.5px; }
+  .row { display:flex; gap:8px; align-items:center; margin-top:8px; }
+  input.cmd { flex:1; background:#0a1020; border:1px solid var(--line); color:var(--text); border-radius:8px;
+    padding:7px 10px; font:12px ui-monospace,Consolas,monospace; }
+  button { background:#13203a; color:var(--text); border:1px solid var(--line); border-radius:8px;
+    padding:7px 14px; cursor:pointer; font-weight:600; font-size:12px; white-space:nowrap; }
+  button:hover { border-color:var(--accent); color:var(--accent); }
+  button.add { background:#0e4d8c; border-color:rgba(94,200,255,.5); }
+  button.add:hover { background:#1466b3; color:#fff; }
+  button.rm:hover { border-color:#ff7b7b; color:#ff7b7b; }
+  a { color:var(--accent); } .note { font-size:11.5px; color:var(--dim); margin-top:6px; }
+  #toast { position:fixed; bottom:14px; left:50%; transform:translateX(-50%); background:#13203a;
+    border:1px solid var(--accent); border-radius:10px; padding:8px 16px; opacity:0; transition:opacity .2s; }
+  #toast.show { opacity:1; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🧰 Tools Hub</h1>
+  <p class="sub">เพิ่มความสามารถใหม่ให้ทีม AI ผ่าน MCP server — กด “เพิ่ม” แล้วไปมอบหมายให้ agent ในหน้าตั้งค่า (เลือก tool ที่ขึ้นต้น <code>mcp:</code>). ตัวที่ต้องใช้ token/path ให้แก้คำสั่งก่อนกดเพิ่ม</p>
+  <div id="list"></div>
+  <p class="note">รายการ MCP เพิ่มเติม: <a href="https://github.com/modelcontextprotocol/servers" target="_blank">modelcontextprotocol/servers</a> — ก๊อปคำสั่งมาวางในช่องไหนก็ได้แล้วกดเพิ่ม · ⚠️ ติดตั้ง MCP = รันโค้ดในเครื่องคุณ ติดตั้งเฉพาะที่ไว้ใจ</p>
+</div>
+<div id="toast"></div>
+<script>
+  // Curated catalog. `cmd` is pre-filled but editable (paths/tokens vary).
+  const CATALOG = [
+    { name:"browser", ic:"🌐", title:"Browser (Playwright)", featured:true, risk:"คุมเบราว์เซอร์",
+      desc:"ให้ agent เปิดเว็บจริง คลิก กรอกฟอร์ม อ่านหน้า ทำงานบนเว็บแทนคุณได้ (แบบ OpenClaw) — กดเพิ่มได้เลย ไม่ต้องตั้งค่าเพิ่ม",
+      cmd:"npx -y @playwright/mcp@latest" },
+    { name:"fetch", ic:"🔗", title:"Web Fetch", risk:"อ่านเว็บ",
+      desc:"ดึงเนื้อหาหน้าเว็บเป็นข้อความ/markdown ให้ agent อ่าน (เบากว่า browser เต็มตัว)",
+      cmd:"npx -y mcp-server-fetch" },
+    { name:"files", ic:"📁", title:"Filesystem", risk:"อ่าน/เขียนไฟล์", edit:true,
+      desc:"ให้ agent อ่าน/เขียนไฟล์ในโฟลเดอร์ที่กำหนด — แก้ path ท้ายคำสั่งก่อนเพิ่ม",
+      cmd:"npx -y @modelcontextprotocol/server-filesystem C:\\Users\\me\\Documents" },
+    { name:"github", ic:"🐙", title:"GitHub", risk:"ต้องมี GITHUB token", edit:true,
+      desc:"จัดการ repo / issue / PR — ต้องตั้ง personal access token (ดูวิธีในลิงก์ด้านล่าง)",
+      cmd:"npx -y @modelcontextprotocol/server-github" },
+    { name:"slack", ic:"💬", title:"Slack", risk:"ต้องมี Slack token", edit:true,
+      desc:"อ่าน/ส่งข้อความ Slack — ต้องตั้ง bot token",
+      cmd:"npx -y @modelcontextprotocol/server-slack" },
+    { name:"google", ic:"📧", title:"Google Workspace", risk:"ต้องตั้ง OAuth", edit:true,
+      desc:"Gmail / Calendar / Drive — ต้องตั้ง Google OAuth credentials ก่อน (ดูคู่มือของ MCP ตัวที่เลือกในลิงก์ด้านล่าง) แล้ววางคำสั่งรันที่นี่",
+      cmd:"npx -y <google-workspace-mcp-package>" },
+  ];
+  let installed = {};
+
+  function refresh() {
+    fetch("/registry").then(r=>r.json()).then(reg=>{ installed = reg.mcp || reg.mcpServers || {}; render(); }).catch(render);
+  }
+  function render() {
+    const host = document.getElementById("list");
+    host.innerHTML = CATALOG.map((c, i) => {
+      const on = installed[c.name];
+      return `<div class="card">
+        <div class="top"><span class="ic">${c.ic}</span><h3>${c.title}</h3>
+          ${c.featured?'<span class="pill on">แนะนำ</span>':''}
+          <span class="pill risk">${c.risk}</span>
+          ${on?'<span class="pill on">✓ ติดตั้งแล้ว</span>':''}</div>
+        <p>${c.desc}</p>
+        <div class="row">
+          <input class="cmd" id="cmd${i}" value="${c.cmd.replace(/"/g,'&quot;')}">
+          ${on
+            ? `<button class="rm" onclick="rm('${c.name}')">เอาออก</button>`
+            : `<button class="add" onclick="add('${c.name}',${i})">＋ เพิ่ม</button>`}
+        </div>
+      </div>`;
+    }).join("");
+  }
+  function add(name, i) {
+    const command = document.getElementById("cmd"+i).value.trim();
+    if (!command || command.includes("<")) return toast("แก้คำสั่งให้ครบก่อน (ยังมี <…> อยู่)");
+    fetch("/registry/mcp", { method:"POST", headers:{"content-type":"application/json"},
+      body: JSON.stringify({ name, command }) })
+      .then(r=>r.ok?toast("✓ เพิ่มแล้ว — ไปมอบหมายให้ agent (tool 'mcp:"+name+"') ในหน้าตั้งค่า"):toast("เพิ่มไม่สำเร็จ"))
+      .then(refresh).catch(()=>toast("เพิ่มไม่สำเร็จ"));
+  }
+  function rm(name) {
+    fetch("/registry/mcp", { method:"POST", headers:{"content-type":"application/json"},
+      body: JSON.stringify({ name, remove:true }) }).then(()=>{ toast("เอาออกแล้ว"); refresh(); });
+  }
+  let tid;
+  function toast(t){ const e=document.getElementById("toast"); e.textContent=t; e.classList.add("show");
+    clearTimeout(tid); tid=setTimeout(()=>e.classList.remove("show"),2600); }
+  refresh();
+</script>
+</body>
+</html>

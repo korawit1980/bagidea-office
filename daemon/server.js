@@ -2328,6 +2328,13 @@ const server = http.createServer((req, res) => {
     try { res.end(fs.readFileSync(path.join(__dirname, "workflow.html"))); }
     catch { res.end("<p>workflow builder unavailable</p>"); }
 
+  } else if (req.method === "GET" && req.url.split("?")[0] === "/toolshub") {
+    // Tools Hub — a curated MCP-server catalog (browser, Google, DB…) to add new
+    // agent capabilities in one click.
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
+    try { res.end(fs.readFileSync(path.join(__dirname, "toolshub.html"))); }
+    catch { res.end("<p>tools hub unavailable</p>"); }
+
   } else if (req.method === "GET" && /^\/brand\/logo[a-z_]*\.png$/.test(req.url)) {
     const f = path.join(__dirname, "..", "godot", "assets", "brand", req.url.split("/").pop());
     fs.readFile(f, (e, data) => {
