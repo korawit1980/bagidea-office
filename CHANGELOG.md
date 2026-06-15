@@ -4,6 +4,15 @@ All notable changes to BagIdea Office. A **release** is a deliberate `VERSION`
 bump on `main` (see [RELEASING.md](RELEASING.md)) — that's what triggers the
 in-app 🔄 update banner. Versions follow [semver](https://semver.org).
 
+## [0.7.13] — Shadows back, and crisp at any zoom
+
+**Fixed**
+- **Shadows no longer disappear at the normal camera.** The previous tweak cut the
+  shadow range too short, so the office sat outside it when zoomed out and lost its
+  shadows entirely. The range now covers the whole office, and the shadow map is
+  twice as detailed (and a touch sharper) — so shadows stay crisp from the far
+  diorama view all the way in to a close-up.
+
 ## [0.7.12] — Discussions you can watch, smarter walking & clearer shadows
 
 **Fixed**
