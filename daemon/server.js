@@ -3719,6 +3719,28 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
     res.end(JSON.stringify({ proposals: proposals.slice(-30).reverse() }));
 
+  } else if (req.method === "POST" && req.url === "/proposals/dismiss") {
+    // 🧹 Quietly clear pending proposals off the owner's plate — bulk or all.
+    // Unlike "reject", this sends NO message to the team and makes no noise in
+    // the feed; it just marks them dismissed so they drop out of the list.
+    readBody(req, (body) => {
+      try {
+        if (!req.headers["x-bagidea-ui"]) { res.writeHead(403); return res.end("human UI only"); }
+        const p = JSON.parse(body || "{}");
+        const ids = p.all ? null : new Set(p.ids || []);
+        let n = 0;
+        for (const pr of proposals) {
+          if (pr.status !== "pending") continue;
+          if (ids && !ids.has(pr.id)) continue;
+          pr.status = "dismissed"; n++;
+        }
+        if (n) saveProposals();
+        broadcast({ type: "proposals.dismissed", count: n }, false);
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ ok: true, dismissed: n }));
+      } catch (e) { res.writeHead(400); res.end(String(e.message)); }
+    });
+
   } else if (req.method === "POST" && req.url === "/proposals/respond") {
     // CEO verdict on a team pitch: approve → a real project is born in the
     // playground and the Director staffs it; reject/hold are remembered.
