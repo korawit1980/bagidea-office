@@ -4,6 +4,13 @@ All notable changes to BagIdea Office. A **release** is a deliberate `VERSION`
 bump on `main` (see [RELEASING.md](RELEASING.md)) — that's what triggers the
 in-app 🔄 update banner. Versions follow [semver](https://semver.org).
 
+## [0.7.18] — The display menu is always there
+
+**Changed**
+- **The 🖥 Display menu now always shows** (in the ⋯ menu), listing exactly the
+  screens the office detected — one monitor shows one (ticked), two show two, and
+  so on. Switching still remembers your choice and restarts to apply it.
+
 ## [0.7.17] — Real multi-monitor detection, its own menu & a tray Restart
 
 **Changed**

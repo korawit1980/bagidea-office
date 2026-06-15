@@ -808,7 +808,7 @@
   <div class="opt" id="discussBtn">🗣 <span>ประชุม agents</span></div>
   <div class="opt" id="mapBtn">🗺 <span>แผนที่</span></div>
   <div class="opt" id="dayBtn">🌗 <span>บรรยากาศ</span></div>
-  <div class="opt" id="dispBtn" style="display:none">🖥 <span>จอแสดงผล</span></div>
+  <div class="opt" id="dispBtn">🖥 <span>จอแสดงผล</span></div>
   <div class="opt" id="langBtn">🌐 <span>ภาษา / Language</span></div>
 </div>
 <div id="langMenu"></div>
@@ -2060,10 +2060,12 @@
       m.appendChild(o);
     }
   }
-  // Show the 🖥 Display entry only when more than one monitor exists.
+  // The 🖥 Display entry always shows and lists the real detected screens (1, 2,
+  // 3…) — even a single monitor appears (ticked), so it's clear what the office
+  // sees. Kept as a function so callers stay simple if the policy changes again.
   function refreshDispVisibility() {
     const b = document.getElementById("dispBtn");
-    if (b) b.style.display = monCount > 1 ? "" : "none";
+    if (b) b.style.display = "";
   }
   function setMonitor(i) {
     if (i === monMode) return;
