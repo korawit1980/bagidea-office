@@ -4,6 +4,25 @@ All notable changes to BagIdea Office. A **release** is a deliberate `VERSION`
 bump on `main` (see [RELEASING.md](RELEASING.md)) — that's what triggers the
 in-app 🔄 update banner. Versions follow [semver](https://semver.org).
 
+## [0.7.20] — Workflow Builder polish & friendlier scrolling
+
+**Fixed**
+- **The last Thai bit in the Workflow Builder** (the Run / Save-as-Skill help line)
+  now translates properly in English offices.
+- **No more white resize-grip / scrollbar** on workflow node boxes — the text area
+  scrolls with the office’s slim themed scrollbar instead.
+
+**Changed**
+- **Scrolling over node text scrolls the text**, not the canvas zoom. (Zoom still
+  works over empty canvas.)
+- **Right-click anywhere on the workflow canvas** pops the ＋ Node menu at your
+  cursor — works on examples too (adding a node + Save just makes an editable copy).
+- **No native browser right-click menu** in pop-out windows anymore (Plugins,
+  Workflow, Tools/Plugins Hub…). Pages that want their own menu still have one;
+  the browser’s default just doesn’t butt in.
+- **The agents rail scrolls sideways with the mouse wheel** — no more wrestling the
+  thin scrollbar.
+
 ## [0.7.19] — Workflow Builder: English-first & right-click to add a node
 
 **Changed**

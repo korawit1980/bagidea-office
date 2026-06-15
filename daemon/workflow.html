@@ -10,8 +10,10 @@
   html,body { margin:0; height:100%; background:var(--bg); color:var(--text);
     font:13px/1.5 -apple-system,Segoe UI,Roboto,"Noto Sans Thai",sans-serif; overflow:hidden; user-select:none; }
   ::-webkit-scrollbar { width:8px; height:8px; }
+  ::-webkit-scrollbar-track { background:transparent; }
   ::-webkit-scrollbar-thumb { background:rgba(94,200,255,.35); border-radius:8px; }
   ::-webkit-scrollbar-thumb:hover { background:rgba(94,200,255,.55); }
+  ::-webkit-scrollbar-corner { background:transparent; }
   #bar { display:flex; align-items:center; gap:8px; padding:8px 12px; border-bottom:1px solid var(--line);
     background:#0c1322; z-index:6; flex-wrap:wrap; }
   #bar input#name { background:#0a1020; border:1px solid var(--line); color:var(--text); border-radius:8px;
@@ -54,8 +56,9 @@
     border-radius:6px; font-size:11px; padding:2px 4px; }
   .node .head .x { margin-left:auto; cursor:pointer; color:var(--dim); padding:0 4px; }
   .node .head .x:hover { color:#ff7b7b; }
-  .node textarea { width:100%; border:0; background:transparent; color:var(--text); resize:vertical;
-    min-height:50px; padding:9px; font:13px/1.45 inherit; outline:none; user-select:text; }
+  .node textarea { width:100%; border:0; background:transparent; color:var(--text); resize:none;
+    min-height:50px; max-height:240px; padding:9px; font:13px/1.45 inherit; outline:none; user-select:text;
+    overflow:auto; }
   .port { position:absolute; left:50%; transform:translateX(-50%); width:14px; height:14px; border-radius:50%;
     background:#0a1020; border:2px solid var(--accent); cursor:crosshair; z-index:2; }
   .port:hover { background:var(--accent); }
@@ -129,7 +132,7 @@
       "📄 This is an <b>example</b> (read-only) — press 💾 Save to make an editable copy",
     "กด “วิเคราะห์” แล้ว Director จะอ่าน workflow (รวมการแตกแขนง/รวม) แล้วบอกว่าต้องใช้ skill/tool/permission อะไร และมอบหมายให้ใคร":
       "Press “Analyze” and the Director reads the workflow (branches & merges) and tells you which skills/tools/permissions it needs and who to assign.",
-    "“<b>รันเลย</b>” = ให้ทีมทำตาม workflow นี้เดี๋ยวนี้ แล้วรายงานผล · “<b>สร้างเป็น Skill</b>” = บันทึกเป็นสกิลที่นำไปติ๊กให้ agent ในหน้าตั้งค่า เพื่อเรียกใช้ซ้ำเมื่อไหร่ก็ได้ (หรือพิมพ์สั่ง agent ให้ “รัน &lt;ชื่อ workflow&gt;”)":
+    "“<b>รันเลย</b>” = ให้ทีมทำตาม workflow นี้เดี๋ยวนี้ แล้วรายงานผล · “<b>สร้างเป็น Skill</b>” = บันทึกเป็นสกิลที่นำไปติ๊กให้ agent ในหน้าตั้งค่า เพื่อเรียกใช้ซ้ำเมื่อไหร่ก็ได้ (หรือพิมพ์สั่ง agent ให้ “รัน <ชื่อ workflow>”)":
       "“<b>Run now</b>” = the team does this workflow now and reports back · “<b>Save as Skill</b>” = save it as a skill you assign to an agent in Settings and reuse anytime (or just tell an agent to “run &lt;workflow name&gt;”).",
     "เพิ่ม node ก่อนนะ":"Add a node first","⏳ Director กำลังวิเคราะห์…":"⏳ Director is analyzing…",
     "วิเคราะห์ไม่สำเร็จ ลองใหม่":"Analysis failed — try again","⏳ ทีมกำลังทำงานตาม workflow…":"⏳ The team is running the workflow…",
@@ -291,7 +294,12 @@
     const up = () => { vp.classList.remove("panning"); document.removeEventListener("mousemove",move); document.removeEventListener("mouseup",up); };
     document.addEventListener("mousemove", move); document.addEventListener("mouseup", up);
   });
-  vp.addEventListener("wheel", (e) => { e.preventDefault();
+  vp.addEventListener("wheel", (e) => {
+    // Wheeling inside a node's text that can actually scroll = read the text,
+    // NOT zoom the canvas. Only zoom over empty canvas / non-scrolling text.
+    const ta = e.target.closest("textarea");
+    if (ta && ta.scrollHeight > ta.clientHeight + 1) return;
+    e.preventDefault();
     const r = vp.getBoundingClientRect(), mx = e.clientX-r.left, my = e.clientY-r.top;
     const f = e.deltaY<0?1.1:0.9, nz = Math.min(2, Math.max(0.3, zoom*f));
     pan.x = mx-(mx-pan.x)*(nz/zoom); pan.y = my-(my-pan.y)*(nz/zoom); zoom = nz; applyTransform();
@@ -367,10 +375,12 @@
     nodes.push(n); renderNode(n); drawEdges();
   }
   vp.addEventListener("contextmenu", (e) => {
-    if (e.target.closest(".node")) return;   // inside a node → keep the native edit menu
+    // Right-click ANYWHERE on the canvas → the ＋ Node menu at the cursor. Works
+    // on examples too: adding a node + Save just forks an editable copy (same as
+    // editing the text does). This is our own menu — the native browser menu is
+    // disabled app-wide for pop-out windows.
     e.preventDefault();
     closeNodeMenu();
-    if (isExample) return;                    // examples are read-only
     const wpos = screenToWorld(e.clientX, e.clientY);
     const m = document.createElement("div");
     m.id = "nodemenu";
