@@ -156,6 +156,13 @@ function monitorCount() {
   } catch { return 1; }
 }
 
+// Validate a "#rrggbb" custom-character color; fall back (then "") if malformed.
+function hexColor(v, fallback) {
+  const s = String(v == null ? "" : v).trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(s)) return s.toLowerCase();
+  return fallback || "";
+}
+
 function rosterEvt() {
   return { type: "roster.sync", agents: reg.agents, roles: reg.roles,
     tools: reg.tools, builtinTools: BUILTIN_TOOLS, mcp: reg.mcpServers,
@@ -2615,7 +2622,15 @@ const server = http.createServer((req, res) => {
           ...cur,
           name: String(p.name || cur.name || id).slice(0, 40),
           role: String(p.role || cur.role || "Specialist").slice(0, 40),
-          avatar: Math.min(Math.max(Number(p.avatar) || cur.avatar || 1, 1), 12),
+          // avatar 1–12 = premade NPC sheets · 0 = the layered "custom" character
+          // tinted by skin/hair/suit. (0 is falsy, so check finiteness explicitly.)
+          avatar: Math.min(Math.max(
+            Number.isFinite(Number(p.avatar)) ? Number(p.avatar)
+              : (cur.avatar !== undefined ? cur.avatar : 1), 0), 12),
+          // Custom-character colors (#rrggbb). Only used when avatar === 0.
+          skin: hexColor(p.skin, cur.skin),
+          hair: hexColor(p.hair, cur.hair),
+          suit: hexColor(p.suit, cur.suit),
           aura: String(p.aura !== undefined ? p.aura : cur.aura || "").slice(0, 16),
           prompt: String(p.prompt !== undefined ? p.prompt : cur.prompt || "").slice(0, 8000),
           persona: {

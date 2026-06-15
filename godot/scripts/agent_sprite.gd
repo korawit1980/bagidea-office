@@ -227,14 +227,31 @@ func set_aura(element: String) -> void:
 	_aura_node.position = Vector3(0, -0.84, 0)  # node floats at y 0.86 — ring on floor
 	add_child(_aura_node)
 
-## Live identity update from the registry (rename / new role / new avatar).
-func apply_identity(p_name: String, p_role: String, p_npc: int) -> void:
+## Live identity update from the registry (rename / new role / new avatar /
+## custom colors). p_skin/p_hair/p_suit are "#rrggbb" strings ("" = leave as-is);
+## they only affect the layered custom character (avatar/npc 0).
+func apply_identity(p_name: String, p_role: String, p_npc: int,
+		p_skin := "", p_hair := "", p_suit := "") -> void:
 	var changed := p_npc != npc_index or p_name != agent_name or p_role != agent_role
 	agent_name = p_name
 	agent_role = p_role
+	var recolor := false
+	if p_skin != "":
+		var cs := Color.from_string(p_skin, skin_color)
+		if cs != skin_color: skin_color = cs; recolor = true
+	if p_hair != "":
+		var ch := Color.from_string(p_hair, hair_color)
+		if ch != hair_color: hair_color = ch; recolor = true
+	if p_suit != "":
+		var cu := Color.from_string(p_suit, suit_color)
+		if cu != suit_color: suit_color = cu; recolor = true
 	if p_npc != npc_index:
 		npc_index = p_npc
 		_setup_visual()
+		changed = true
+	elif recolor and npc_index == 0:
+		_setup_visual()  # re-composite the tinted layers
+		changed = true
 	if changed and _hud:
 		_hud.unregister(self)
 		_hud.register(self, agent_name, agent_role, _portrait(), suit_color.lightened(0.25))

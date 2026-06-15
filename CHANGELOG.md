@@ -4,6 +4,14 @@ All notable changes to BagIdea Office. A **release** is a deliberate `VERSION`
 bump on `main` (see [RELEASING.md](RELEASING.md)) — that's what triggers the
 in-app 🔄 update banner. Versions follow [semver](https://semver.org).
 
+## [0.7.23] — Design-your-own characters (custom colors)
+
+**Added**
+- **A 🎨 Custom character** in the avatar picker. Pick your own **skin / hair /
+  outfit** colors (or hit 🎲 for a random mix) and that agent renders as a unique
+  tinted character — unlimited looks, no new art needed. Each agent remembers its
+  colors, and the picker speaks all 14 languages.
+
 ## [0.7.22] — Tools Hub, Plugins Hub & Workflow Builder speak every language
 
 **Changed**
