@@ -2263,6 +2263,29 @@
     if (provbox) {
       provbox.innerHTML = "";
       const pcAll = regAll.providerConfig || {};
+      // Claude — special: subscription login OR API key, auto-detected. The default brain.
+      const cauth = await fetch("/claude/auth").then((x) => x.json()).catch(() => ({}));
+      {
+        const statusText = cauth.viaKey ? "เชื่อมต่อแล้ว · ใช้ API key"
+          : cauth.loggedIn ? "เชื่อมต่อแล้ว · ใช้ subscription login"
+          : "ยังไม่ได้เชื่อมต่อ — Login หรือใส่ API key";
+        const cc = document.createElement("div");
+        cc.className = "arow"; cc.style.cursor = "default";
+        cc.innerHTML = `<div class="meta"><b>${cauth.connected ? "✅" : "⚪"} Claude · Anthropic</b>
+            <span class="pstat" style="color:${cauth.connected ? "#4ade80" : "var(--dim)"}">${statusText}</span></div>` +
+          `<div class="winbtn" data-a="login" title="Login (subscription)">🔓</div>
+           <input type="password" placeholder="หรือวาง API key…" autocomplete="new-password" style="flex:0 0 120px;margin:0">
+           <div class="winbtn" data-a="savekey" title="ใช้ API key">💾</div>`;
+        cc.querySelector('[data-a="login"]').onclick = async () => {
+          await api("/claude/login", {});
+          cc.querySelector(".pstat").textContent = "เปิดเทอร์มินัลให้ login แล้ว — ทำตามขั้นตอนในหน้าต่างนั้น แล้วกลับมากด 🔄";
+        };
+        cc.querySelector('[data-a="savekey"]').onclick = () => {
+          const v = cc.querySelector("input").value.trim();
+          if (v) api("/registry/key", { name: "ANTHROPIC_API_KEY", value: v }).then(() => openSettings("connect"));
+        };
+        provbox.appendChild(cc);
+      }
       for (const [pid, label, where, viaProxy] of PROV) {
         const pc = pcAll[pid] || {};
         const connected = !!pc.connected;

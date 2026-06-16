@@ -3215,6 +3215,30 @@ const server = http.createServer((req, res) => {
       } catch (e) { return done(false, String((e && e.message) || e)); }
     });
 
+  } else if (req.method === "GET" && req.url === "/claude/auth") {
+    // 🔓 Is Claude usable? Logged-in (credentials file / oauthAccount) OR API key set.
+    const home = require("os").homedir();
+    let loggedIn = false;
+    try { loggedIn = fs.existsSync(path.join(home, ".claude", ".credentials.json")); } catch {}
+    if (!loggedIn) {
+      try { const j = JSON.parse(fs.readFileSync(path.join(home, ".claude.json"), "utf8"));
+        loggedIn = !!(j && (j.oauthAccount || j.userID)); } catch {}
+    }
+    const viaKey = !!(reg.apiKeys && reg.apiKeys.ANTHROPIC_API_KEY);
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ loggedIn, viaKey, connected: loggedIn || viaKey }));
+
+  } else if (req.method === "POST" && req.url === "/claude/login") {
+    // 🔓 Open a terminal running `claude` so the user completes browser OAuth login.
+    try {
+      if (process.platform === "win32")
+        spawn("cmd", ["/c", "start", "Claude Login", "cmd", "/k", "claude"], { detached: true });
+      else if (process.platform === "darwin")
+        spawn("osascript", ["-e", 'tell application "Terminal" to do script "claude"'], { detached: true });
+      else spawn("x-terminal-emulator", ["-e", "claude"], { detached: true });
+      res.writeHead(200, { "content-type": "application/json" }); res.end("{}");
+    } catch (e) { res.writeHead(500); res.end(String(e.message)); }
+
   } else if (req.method === "POST" && req.url === "/registry/channel") {
     // 🔗 channel connector config — saving restarts the connectors live.
     readBody(req, (body) => {
