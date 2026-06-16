@@ -2250,6 +2250,61 @@
       const v = modalCard.querySelector("#kVal").value.trim();
       if (n && v) api("/registry/key", { name: n, value: v }).then(() => openSettings("connect"));
     };
+    // ── 🧠 model providers: paste key → Connect → live connected state.
+    const PROV = [
+      ["glm", "GLM · Z.AI", "z.ai", false],
+      ["deepseek", "DeepSeek", "platform.deepseek.com", false],
+      ["qwen", "Qwen · Alibaba", "Alibaba Model Studio", false],
+      ["minimax", "MiniMax", "platform.minimax.io", false],
+      ["openai", "OpenAI", "platform.openai.com/api-keys", true],
+      ["gemini", "Gemini", "aistudio.google.com/apikey", true],
+    ];
+    const provbox = modalCard.querySelector("#provbox");
+    if (provbox) {
+      provbox.innerHTML = "";
+      const pcAll = regAll.providerConfig || {};
+      for (const [pid, label, where, viaProxy] of PROV) {
+        const pc = pcAll[pid] || {};
+        const connected = !!pc.connected;
+        const card = document.createElement("div");
+        card.className = "arow"; card.style.cursor = "default";
+        const tag = viaProxy ? ' <span style="color:var(--dim);font-size:10px">(proxy ในตัว)</span>' : "";
+        card.innerHTML =
+          `<div class="meta"><b>${connected ? "✅" : "⚪"} ${label}${tag}</b>
+            <span class="pstat" style="color:${connected ? "#4ade80" : "var(--dim)"}">${connected ? "เชื่อมต่อแล้ว" : (pc.token ? "ยังไม่ได้เชื่อมต่อ — กด Connect" : "ยังไม่ได้เชื่อมต่อ · ขอ key: " + where)}</span></div>` +
+          (connected
+            ? `<div class="winbtn" data-a="retest" title="ทดสอบใหม่">🧪</div>
+               <div class="winbtn" data-a="change" title="เปลี่ยน key">🔄</div>
+               <div class="winbtn hide" data-a="disc" title="ตัดการเชื่อมต่อ">✕</div>`
+            : `<input type="password" placeholder="วาง key…" autocomplete="new-password" style="flex:0 0 130px;margin:0">
+               <div class="winbtn" data-a="connect" title="Connect">🔌</div>`);
+        const stat = card.querySelector(".pstat");
+        const connect = async (key) => {
+          if (key) await api("/registry/provider", { provider: pid, token: key });
+          stat.textContent = "🧪 กำลังเชื่อมต่อ…";
+          const r = await api("/registry/provider/test", { provider: pid });
+          if (r.ok) openSettings("connect");
+          else stat.innerHTML = `<span style="color:#ff6258">❌ ${r.msg || "เชื่อมต่อไม่สำเร็จ"}</span>`;
+        };
+        card.querySelectorAll(".winbtn").forEach((btn) => {
+          const act = btn.dataset.a;
+          if (act === "connect") btn.onclick = () => connect(card.querySelector("input").value.trim());
+          else if (act === "retest") btn.onclick = () => connect("");
+          else if (act === "disc") btn.onclick = () =>
+            api("/registry/provider", { provider: pid, remove: true }).then(() => openSettings("connect"));
+          else if (act === "change") btn.onclick = () => {
+            const meta = card.querySelector(".meta"); card.innerHTML = ""; card.appendChild(meta);
+            const inp = document.createElement("input");
+            inp.type = "password"; inp.placeholder = "วาง key ใหม่…"; inp.autocomplete = "new-password";
+            inp.style.cssText = "flex:0 0 130px;margin:0";
+            const ok = document.createElement("div"); ok.className = "winbtn"; ok.textContent = "🔌"; ok.title = "Connect";
+            ok.onclick = () => connect(inp.value.trim());
+            card.append(inp, ok); inp.focus();
+          };
+        });
+        provbox.appendChild(card);
+      }
+    }
     // Channel cards: enable switch + the fields each platform needs.
     const CH = [
       ["telegram", "✈️ Telegram", "สร้าง bot กับ @BotFather แล้ววาง token — ใช้ได้ทันที ไม่ต้องมี public URL",
@@ -2379,6 +2434,8 @@
             <input id="kVal" placeholder="ค่า key (เก็บในเครื่องเท่านั้น)" type="password" autocomplete="new-password">
             <button class="sparkle" id="addKey">＋</button>
           </div></div>
+        <div class="field"><label>🧠 MODELS / PROVIDERS — สมองของ agent (วาง key แล้วกด Connect · ตั้ง provider ต่อ agent ในหน้า AGENTS)</label>
+          <div id="provbox"></div></div>
         <div class="field"><label>📡 CHANNELS — คุยกับออฟฟิศจากภายนอกผ่าน Director (main)</label>
           <div id="chbox"></div></div>`;
     } else if (tab === "threads") {
@@ -2663,9 +2720,10 @@
        </select></div>
        <div class="field"><label>🧠 สมอง (โมเดล/ผู้ให้บริการ) — ดีฟอลต์คือ Claude</label>
          <select id="eProvider"></select>
-         <input id="eModel" maxlength="60" style="margin-top:6px" placeholder="โมเดล (เว้นว่าง = ดีฟอลต์ของผู้ให้บริการ)">
-         <div id="eProvTok" style="display:none;margin-top:6px">
-           <input id="eProvKey" type="password" autocomplete="new-password" placeholder="วาง API key ของผู้ให้บริการนี้ (เว้นว่างถ้าตั้งไว้แล้ว)…">
+         <select id="eModel" style="margin-top:6px"></select>
+         <div id="eProvWarn" style="display:none;margin-top:6px;font-size:11px">
+           <span style="color:#ffb054">⚠ ยังไม่ได้เชื่อมต่อ provider นี้</span>
+           <button class="send" id="eGoConnect" style="margin-left:6px">🔗 ไปหน้า CONNECT</button>
          </div>
          <div style="font-size:10.5px;color:var(--dim);margin-top:4px">Claude ใช้ login/แผนเดิม · เจ้าอื่นใช้ key แยก (ประหยัดกว่า)</div>
        </div>
@@ -2826,13 +2884,32 @@
     if (provSel) {
       const BRAINS = [["claude", "Claude · Anthropic"], ["glm", "GLM · Z.AI"],
         ["deepseek", "DeepSeek"], ["qwen", "Qwen · Alibaba"], ["minimax", "MiniMax"],
-        ["openai", "OpenAI · LiteLLM"], ["gemini", "Gemini · LiteLLM"]];
+        ["openai", "OpenAI · proxy"], ["gemini", "Gemini · proxy"]];
+      const MODELS = { claude: ["", "opus", "sonnet", "haiku"], glm: ["glm-4.6", "glm-4.5"],
+        deepseek: ["deepseek-v4-pro", "deepseek-v4-flash"],
+        qwen: ["qwen3-coder-plus", "qwen3-coder-next", "qwen3-coder-flash"],
+        minimax: ["MiniMax-M3"], openai: ["gpt-4o", "gpt-4o-mini"],
+        gemini: ["gemini-2.5-flash", "gemini-2.5-pro"] };
       provSel.innerHTML = BRAINS.map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
       provSel.value = a.provider || "claude";
-      modalCard.querySelector("#eModel").value = a.model || "";
-      const tokBox = modalCard.querySelector("#eProvTok");
-      const syncTok = () => { tokBox.style.display = provSel.value === "claude" ? "none" : "block"; };
-      provSel.onchange = syncTok; syncTok();
+      const modelSel = modalCard.querySelector("#eModel");
+      const warn = modalCard.querySelector("#eProvWarn");
+      const goc = modalCard.querySelector("#eGoConnect");
+      if (goc) goc.onclick = () => openSettings("connect");
+      let pcAll = {};
+      const renderModels = () => {
+        const p = provSel.value;
+        const connected = p === "claude" ? true : !!(pcAll[p] && pcAll[p].connected);
+        if (!connected) { warn.style.display = "block"; modelSel.style.display = "none"; return; }
+        warn.style.display = "none"; modelSel.style.display = "";
+        let list = (pcAll[p] && pcAll[p].models && pcAll[p].models.length) ? pcAll[p].models : (MODELS[p] || [""]);
+        if (a.model && !list.includes(a.model)) list = [a.model, ...list];
+        modelSel.innerHTML = list.map((m) => `<option value="${m}">${m || "(ดีฟอลต์)"}</option>`).join("");
+        modelSel.value = a.model || (p === "claude" ? "" : (list[0] || ""));
+      };
+      provSel.onchange = renderModels;
+      renderModels();
+      fetch("/registry").then((x) => x.json()).then((rg) => { pcAll = rg.providerConfig || {}; renderModels(); }).catch(() => {});
     }
       modalCard.querySelector("#ePrompt").value = a.prompt || "";
       modalCard.querySelector("#eExpertise").value = px.expertise || "";
@@ -2884,13 +2961,6 @@
               rules: modalCard.querySelector("#eRules").value,
             },
             skills: [...mySkills], tools: [...myTools] };
-      // A freshly-pasted provider key goes to the token vault (blank = keep existing).
-      if (!isUser) {
-        const pk = modalCard.querySelector("#eProvKey");
-        const prov = (modalCard.querySelector("#eProvider") || {}).value;
-        if (pk && pk.value.trim() && prov && prov !== "claude")
-          try { await api("/registry/provider", { provider: prov, token: pk.value.trim() }); } catch {}
-      }
       const r = await api("/registry/agent", payload);
       closeModal();
       if (r.id && !isUser) { ensureAgent(r.id); setTarget(r.id); }
