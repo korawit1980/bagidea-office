@@ -3042,7 +3042,11 @@
         if (saveBtn) { saveBtn.disabled = !connected; saveBtn.title = connected ? "" : tr("⚠ ยังไม่ได้เชื่อมต่อ provider นี้"); }
         if (!connected) { warn.style.display = "block"; modelWrap.style.display = "none"; return; }
         warn.style.display = "none"; modelWrap.style.display = "";
-        curModels = (pcAll[p] && pcAll[p].models && pcAll[p].models.length) ? pcAll[p].models : (MODELS[p] || []);
+        // Known-good models first, then the rest of the live list (deduped) — so the
+        // safe picks are obvious and you don't accidentally choose a plan-gated model.
+        const stat = MODELS[p] || [];
+        const live = (pcAll[p] && pcAll[p].models) || [];
+        curModels = [...stat, ...live.filter((m) => !stat.includes(m))];
         // Show the saved model only on the agent's own provider; reset when switching.
         modelInput.value = provChanged ? "" : ((p === (a.provider || "claude")) ? (a.model || "") : "");
       };
