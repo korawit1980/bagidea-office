@@ -2755,6 +2755,34 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { "content-type": "application/json" });
     res.end(JSON.stringify({ sessions: list }));
 
+  } else if (req.method === "GET" && req.url === "/brains") {
+    // Monitoring snapshot: every provider's connect status + every agent's brain
+    // (provider/model) and latest context usage. Feeds the 🧠 BRAINS sidebar panel.
+    const pc = reg.providerConfig || {};
+    const KNOWN = ["claude", "glm", "deepseek", "qwen", "minimax", "openai", "gemini", "openrouter", "nvidia"];
+    const byProvider = {};
+    const agents = [];
+    for (const [id, a] of Object.entries(reg.agents || {})) {
+      if (id === "ceo") continue;
+      const p = a.provider || reg.defaultProvider || "claude";
+      const list = sess[id] || [];
+      const latest = list.length ? list.reduce((x, y) => (x.ts > y.ts ? x : y)) : null;
+      const lu = latest && latest.lastUsage;
+      const usage = lu ? { in: lu.in, out: lu.out, win: lu.win,
+        pct: lu.win ? Math.min(100, Math.round(lu.in / lu.win * 100)) : 0, ts: lu.ts } : null;
+      agents.push({ id, name: a.name, role: a.role, provider: p, model: a.model || "", tag: modelTag(id), usage });
+      (byProvider[p] = byProvider[p] || []).push(id);
+    }
+    const ids = Array.from(new Set([...KNOWN, ...Object.keys(pc)]));
+    const providers = ids.map((id) => {
+      const c = pc[id] || {};
+      return { id, label: c.label || id, kind: c.kind || (KNOWN.includes(id) ? "" : "custom"),
+        connected: id === "claude" ? true : !!c.connected, agents: byProvider[id] || [] };
+    }).filter((p) => p.connected || p.agents.length || pc[p.id]);
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ providers, agents,
+      defaultProvider: reg.defaultProvider || "claude" }));
+
   } else if (req.method === "POST" && req.url === "/discuss") {
     readBody(req, (body) => {
       try {
