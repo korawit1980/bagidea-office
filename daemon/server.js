@@ -2917,17 +2917,19 @@ const server = http.createServer((req, res) => {
       try {
         const { task, agent } = JSON.parse(body);
         const kill = (rec, t) => {
-          if (!rec) return;
-          try {
-            if (process.platform === "win32")
-              spawn("taskkill", ["/PID", String(rec.child.pid), "/T", "/F"], { windowsHide: true });
-            else rec.child.kill("SIGKILL");
-          } catch {}
-          broadcast({ type: "task.completed", agent: rec.agent, task: t });
+          if (rec) {
+            try {
+              if (process.platform === "win32")
+                spawn("taskkill", ["/PID", String(rec.child.pid), "/T", "/F"], { windowsHide: true });
+              else rec.child.kill("SIGKILL");
+            } catch {}
+          }
           runChildren.delete(t);
+          // Always clear the strip — covers stale/replayed entries whose child is already gone.
+          broadcast({ type: "task.completed", agent: (rec && rec.agent) || agent || "", task: t });
         };
-        if (task && runChildren.has(task)) kill(runChildren.get(task), task);
-        else if (agent) { for (const [t, rec] of runChildren) if (rec.agent === agent) kill(rec, t); }
+        if (task) kill(runChildren.get(task), task);
+        if (agent) { for (const [t, rec] of [...runChildren]) if (rec.agent === agent) kill(rec, t); }
         res.writeHead(200); res.end("ok");
       } catch (e) { res.writeHead(400); res.end(String(e.message)); }
     });

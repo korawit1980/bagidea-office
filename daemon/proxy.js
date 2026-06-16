@@ -141,9 +141,15 @@ async function handle(req, res, provider, reg, raw) {
   const model = pickModel(a.model, fallbackModel);
   const body = toOpenAI(a, model);
 
+  // Abort the upstream call if the client (claude) disconnects — e.g. the task was
+  // cancelled — so we stop streaming from (and queuing on) a now-dead request.
+  const ac = new AbortController();
+  const onGone = () => { try { ac.abort(); } catch {} };
+  req.on("close", onGone); req.on("aborted", onGone);
+
   let r;
   try {
-    r = await fetch(chat, { method: "POST",
+    r = await fetch(chat, { method: "POST", signal: ac.signal,
       headers: { "content-type": "application/json", authorization: "Bearer " + key },
       body: JSON.stringify(body) });
   } catch (e) {
