@@ -13,6 +13,17 @@
 // serves both. The real key never reaches the sandbox; it's injected here.
 // ---------------------------------------------------------------------------
 
+const fs = require("fs");
+const path = require("path");
+const LOG = path.join(__dirname, "proxy.log");
+// Lightweight per-call log (auto-truncated) so provider failures are diagnosable.
+function plog(line) {
+  try {
+    try { if (fs.statSync(LOG).size > 250000) fs.writeFileSync(LOG, ""); } catch {}
+    fs.appendFileSync(LOG, line + "\n");
+  } catch {}
+}
+
 const UPSTREAM = {
   openai: { url: "https://api.openai.com/v1/chat/completions", key: "OPENAI_API_KEY",
             fallbackModel: "gpt-4o-mini" },
@@ -166,6 +177,7 @@ function streamAnthropic(res, msg) {
 
 async function handle(req, res, provider, reg, raw) {
   const errOut = (status, type, message) => {
+    plog(`  ERR ${status} ${type}: ${String(message).slice(0, 280)}`);
     try {
       res.writeHead(status, { "content-type": "application/json" });
       res.end(JSON.stringify({ type: "error", error: { type, message } }));
@@ -190,20 +202,47 @@ async function handle(req, res, provider, reg, raw) {
   // Buffer the upstream (no live SSE translation) for reliability across providers.
   body.stream = false;
   delete body.stream_options;
+  // Claude Code sends Anthropic-sized max_tokens (often 32k); most OpenAI-compat
+  // chat models cap completion at 16k → pre-clamp to avoid a guaranteed 400.
+  if (body.max_tokens && body.max_tokens > 16384) body.max_tokens = 16384;
+  plog(`[${new Date().toISOString().slice(11, 19)}] ${provider} model=${model} stream=${!!a.stream} msgs=${(body.messages || []).length} tools=${(body.tools || []).length} max=${body.max_tokens || "-"} → ${chat}`);
 
   // Cancel the upstream only if claude drops before we finish (real task cancel).
   const ac = new AbortController();
   res.on("close", () => { if (!res.writableEnded) { try { ac.abort(); } catch {} } });
 
+  const doFetch = () => fetch(chat, { method: "POST", signal: ac.signal,
+    headers: { "content-type": "application/json", authorization: "Bearer " + key,
+      "HTTP-Referer": "https://github.com/bagidea/bagidea-office", "X-Title": "BagIdea Office" },
+    body: JSON.stringify(body) });
+
   let r;
-  try {
-    r = await fetch(chat, { method: "POST", signal: ac.signal,
-      headers: { "content-type": "application/json", authorization: "Bearer " + key,
-        "HTTP-Referer": "https://github.com/bagidea/bagidea-office", "X-Title": "BagIdea Office" },
-      body: JSON.stringify(body) });
-  } catch (e) {
+  try { r = await doFetch(); }
+  catch (e) {
     if (ac.signal.aborted) return;   // cancelled — nothing to send
     return errOut(502, "api_error", "upstream fetch failed: " + (e && e.message));
+  }
+
+  // One-shot self-heal for the param rejections OpenAI-compat providers throw most
+  // (newer models want max_completion_tokens; some cap max_tokens lower; some pin
+  // temperature). Adjust the offending field and retry once before giving up.
+  if (!r.ok && (r.status === 400 || r.status === 422)) {
+    const txt = await r.text().catch(() => "");
+    let fix = "";
+    if (/max_completion_tokens/i.test(txt) && body.max_tokens != null) {
+      body.max_completion_tokens = body.max_tokens; delete body.max_tokens; fix = "max_completion_tokens";
+    } else if (/max_tokens/i.test(txt) && /(too large|maximum|at most|less than|support|exceed)/i.test(txt) && body.max_tokens) {
+      body.max_tokens = 4096; fix = "max_tokens=4096";
+    } else if (/temperature/i.test(txt) && body.temperature != null) {
+      delete body.temperature; fix = "drop temperature";
+    }
+    if (!fix) return errOut(r.status, "api_error", (txt || `upstream HTTP ${r.status}`).slice(0, 600));
+    plog(`  retry (${fix}) after 400: ${txt.slice(0, 160)}`);
+    try { r = await doFetch(); }
+    catch (e) {
+      if (ac.signal.aborted) return;
+      return errOut(502, "api_error", "upstream fetch failed: " + (e && e.message));
+    }
   }
   if (!r.ok) {
     const txt = await r.text().catch(() => "");
@@ -214,7 +253,15 @@ async function handle(req, res, provider, reg, raw) {
   // Some gateways (OpenRouter) answer 200 with an error object in the body.
   if (j && j.error) return errOut(502, "api_error", String(j.error.message || JSON.stringify(j.error)).slice(0, 600));
 
+  const finish = (j.choices && j.choices[0] && j.choices[0].finish_reason) || "?";
   const msg = toAnthropic(j, model);
+  plog(`  ok status=${r.status} finish=${finish} blocks=${msg.content.length}`);
+  if (!msg.content.length) {
+    // Empty/odd reply → surface it (and log the raw body) instead of going silent.
+    plog(`  EMPTY body=${JSON.stringify(j).slice(0, 700)}`);
+    msg.content.push({ type: "text",
+      text: `(proxy: ${provider}/${model} returned no content — finish_reason=${finish})` });
+  }
   if (a.stream) streamAnthropic(res, msg);
   else { res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify(msg)); }
 }
