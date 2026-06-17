@@ -3,7 +3,7 @@ param()
 
 $ErrorActionPreference = "Stop"
 
-$Root = Resolve-Path (Join-Path $PSScriptRoot "..")
+$Root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $GodotProject = Join-Path $Root "godot"
 $GodotExe = $null
 
@@ -22,9 +22,28 @@ $Candidates += @(
 
 foreach ($Candidate in $Candidates) {
   if (-not $Candidate) { continue }
-  $Command = Get-Command $Candidate -ErrorAction SilentlyContinue
-  if ($Command) { $GodotExe = $Command.Source; break }
-  if (Test-Path -LiteralPath $Candidate) { $GodotExe = (Resolve-Path -LiteralPath $Candidate).Path; break }
+  if (Test-Path -LiteralPath $Candidate -PathType Leaf) {
+    $GodotExe = (Resolve-Path -LiteralPath $Candidate).Path
+    break
+  }
+
+  if (Test-Path -LiteralPath $Candidate -PathType Container) {
+    $NestedExe = Get-ChildItem -LiteralPath $Candidate -File -Filter "Godot*_win64.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $NestedExe) {
+      $NestedExe = Get-ChildItem -LiteralPath $Candidate -File -Filter "Godot*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+    }
+    if ($NestedExe) {
+      $GodotExe = $NestedExe.FullName
+      break
+    }
+    continue
+  }
+
+  $Command = Get-Command $Candidate -CommandType Application -ErrorAction SilentlyContinue
+  if ($Command -and (Test-Path -LiteralPath $Command.Source -PathType Leaf)) {
+    $GodotExe = $Command.Source
+    break
+  }
 }
 
 if (-not $GodotExe) {

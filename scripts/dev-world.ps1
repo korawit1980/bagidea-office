@@ -3,7 +3,7 @@ param()
 
 $ErrorActionPreference = "Stop"
 
-$Root = Resolve-Path (Join-Path $PSScriptRoot "..")
+$Root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $GodotProject = Join-Path $Root "godot"
 $Candidates = @()
 
@@ -22,9 +22,23 @@ $Candidates += @(
 function Resolve-Godot {
   foreach ($Candidate in $Candidates) {
     if (-not $Candidate) { continue }
-    $Command = Get-Command $Candidate -ErrorAction SilentlyContinue
-    if ($Command) { return $Command.Source }
-    if (Test-Path -LiteralPath $Candidate) { return (Resolve-Path -LiteralPath $Candidate).Path }
+    if (Test-Path -LiteralPath $Candidate -PathType Leaf) {
+      return (Resolve-Path -LiteralPath $Candidate).Path
+    }
+
+    if (Test-Path -LiteralPath $Candidate -PathType Container) {
+      $NestedExe = Get-ChildItem -LiteralPath $Candidate -File -Filter "Godot*_win64.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+      if (-not $NestedExe) {
+        $NestedExe = Get-ChildItem -LiteralPath $Candidate -File -Filter "Godot*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+      }
+      if ($NestedExe) { return $NestedExe.FullName }
+      continue
+    }
+
+    $Command = Get-Command $Candidate -CommandType Application -ErrorAction SilentlyContinue
+    if ($Command -and (Test-Path -LiteralPath $Command.Source -PathType Leaf)) {
+      return $Command.Source
+    }
   }
   throw @"
 Godot executable was not found.
