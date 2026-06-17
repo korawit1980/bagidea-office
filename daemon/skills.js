@@ -1,14 +1,11 @@
-// BagIdea Office — native skill sync (P3).
-// Projects each agent's assigned skills (a.skills[]) to real Claude Code Skill
-// files so headless sessions disclose them PROGRESSIVELY (only the frontmatter
-// description is in context until Claude invokes one) via `--add-dir`, instead
-// of inlining every skill body into the prompt. a.skills[] stays the source of
-// truth; the files are a derived projection.
+// daemon/skills.js
+// BagIdea Office — legacy native skill sync (P3).
+// Projects each agent's assigned skills (a.skills[]) to skill files. The Codex
+// runtime now inlines skills by default; this projection is retained only for
+// compatibility experiments via BAGIDEA_CODEX_NATIVE_SKILLS=1.
 //
-// Verified mechanism: `claude -p --add-dir <dir>` discovers
-// <dir>/.claude/skills/<id>/SKILL.md with no extra --allowedTools entry and no
-// trust prompt. So we pass --add-dir <agentDir> and the session sees exactly
-// that agent's skills.
+// Historical mechanism: the former Claude adapter discovered
+// <dir>/.claude/skills/<id>/SKILL.md. Codex does not rely on this path.
 
 const fs = require("fs");
 const path = require("path");

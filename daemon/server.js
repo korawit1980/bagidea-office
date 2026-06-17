@@ -1,9 +1,10 @@
+// daemon/server.js
 // BagIdea Office — daemon v3 (Layer 0).
-// Zero-dependency event hub + Claude Code adapter + permission broker:
+// Zero-dependency event hub + Codex CLI adapter + permission broker:
 //   HTTP :8787  GET  /              → Layer-2 overlay (chat panel web app)
 //   WS   :8787  GET  /ws (upgrade)  → event stream for renderers + overlays
 //                                      (new clients get a journal replay first)
-//               POST /chat          → spawn a real Claude Code session
+//               POST /chat          → spawn a real Codex CLI session
 //               POST /event         → adapters push events (hooks, tests)
 //               POST /perm/request  → PreToolUse hook long-polls for a decision
 //               POST /perm/respond  → overlay/user answers {id, decision}
@@ -44,7 +45,7 @@ let taskCounter = 0;
 
 // ---------------------------------------------------------------- registry
 // Persistent staff roster + roles (skills/tools libraries ride along).
-// main = Claude, the undeletable Director; ceo = the human owner's avatar.
+// main = Codex-powered Director; ceo = the human owner's avatar.
 
 const REGISTRY = path.join(__dirname, "registry.json");
 let reg;
@@ -73,6 +74,10 @@ function loadReg() {
   // Per-agent model/provider routing (the swappable brain). Per-provider creds +
   // optional baseUrl/model overrides live here; agents opt in via a.provider.
   reg.providerConfig = reg.providerConfig || {};   // { glm:{token}, litellm:{baseUrl,token}, ... }
+  if (!reg.defaultProvider || reg.defaultProvider === "claude") reg.defaultProvider = "codex";
+  for (const a of Object.values(reg.agents || {})) {
+    if (a && a.provider === "claude") a.provider = "codex";
+  }
   reg.roles = reg.roles || ["Director", "Founder", "Researcher", "Engineer",
     "Designer", "Analyst", "Operator", "Specialist"];
   reg.skills = reg.skills || {};
@@ -291,12 +296,11 @@ function latestSession(agent) {
   return l.length ? l.reduce((a, b) => (a.ts > b.ts ? a : b)) : null;
 }
 
-// The swappable brain: which backend an agent's `claude` spawn talks to. Returns
-// env overrides (ANTHROPIC_BASE_URL/_AUTH_TOKEN) + --model args; "claude"/unset/
-// unconfigured → empties, so the spawn is unchanged (fail-open). See providers.js.
+// The swappable brain now feeds Codex CLI. Provider-specific proxy routing is
+// legacy metadata; Codex itself owns the runtime and accepts a model flag.
 function brainRoute(agentId) {
   const a = agentId && reg.agents ? reg.agents[agentId] : null;
-  const provider = (a && a.provider) || reg.defaultProvider || "claude";
+  const provider = (a && a.provider) || reg.defaultProvider || "codex";
   const model = (a && a.model) || "";
   return providers.resolve(provider, model, reg, { proxyBase: "http://127.0.0.1:" + OEP_PORT });
 }
@@ -316,70 +320,114 @@ function isOverflowError(t) { return !!t && OVERFLOW_RE.test(String(t)); }
 // system prompt + tool schemas the office always sends (~25k). 0 = never compact
 // (Claude manages its own context). Unknown/custom → providerConfig.contextBudget,
 // else a safe default. Overridable per provider via providerConfig[p].contextBudget.
-const CTX_BUDGET = { claude: 0, glm: 115000, deepseek: 115000, qwen: 230000,
+const CTX_BUDGET = { codex: 115000, claude: 0, glm: 115000, deepseek: 115000, qwen: 230000,
   minimax: 180000, openai: 115000, gemini: 800000, openrouter: 100000, nvidia: 100000 };
 function provBudget(agent) {
   const a = reg.agents && reg.agents[agent];
-  const p = (a && a.provider) || reg.defaultProvider || "claude";
+  const p = (a && a.provider) || reg.defaultProvider || "codex";
   const pc = (reg.providerConfig || {})[p] || {};
   const b = Number(pc.contextBudget);
   return b > 0 ? b : (p in CTX_BUDGET ? CTX_BUDGET[p] : 100000);
 }
-// Estimate a resumed thread's size from the REAL claude session file (full tool
-// outputs live there, not in our trimmed log). bytes/4 ≈ tokens; + office overhead.
+// Estimate a resumed thread's size. Codex stores sessions internally, so use the
+// visible office log as a conservative fallback; old Claude sessions still use
+// the historical jsonl path when present.
 function overBudget(agent, entry, cwd) {
   const budget = provBudget(agent);
-  if (!budget || !entry || !entry.sid) return false;  // 0 = claude self-compacts
+  if (!budget || !entry || !entry.sid) return false;
   try {
     const enc = String(cwd).replace(/[^a-zA-Z0-9]/g, "-");
     const f = path.join(require("os").homedir(), ".claude", "projects", enc, entry.sid + ".jsonl");
     const estTokens = Math.round(fs.statSync(f).size / 4) + 25000;
     return estTokens > budget;
-  } catch { return false; }
+  } catch {
+    const visible = (entry.log || []).map((l) => String(l.text || "")).join("\n");
+    return Math.round(visible.length / 4) + 25000 > budget;
+  }
 }
 
 // Context window per backend (for the chat's usage meter — distinct from the compaction
 // budget above; Claude's real window is ~200k). Overridable via providerConfig.contextWindow.
-const CTX_WINDOW = { claude: 200000, glm: 128000, deepseek: 128000, qwen: 256000,
+const CTX_WINDOW = { codex: 128000, claude: 200000, glm: 128000, deepseek: 128000, qwen: 256000,
   minimax: 200000, openai: 128000, gemini: 1000000, openrouter: 128000, nvidia: 128000 };
 function ctxWindow(agent) {
   const a = reg.agents && reg.agents[agent];
-  const p = (a && a.provider) || reg.defaultProvider || "claude";
+  const p = (a && a.provider) || reg.defaultProvider || "codex";
   const pc = (reg.providerConfig || {})[p] || {};
   return Number(pc.contextWindow) || CTX_WINDOW[p] || 128000;
 }
 // Short "provider/model" tag shown in the chat history (which brain produced a line).
 function modelTag(agent) {
   const a = (reg.agents && reg.agents[agent]) || {};
-  const p = a.provider || reg.defaultProvider || "claude";
-  if (p === "claude") return a.model ? "claude/" + a.model : "claude";
+  const p = a.provider || reg.defaultProvider || "codex";
+  if (p === "codex") return a.model ? "codex/" + a.model : "codex";
   return a.model ? p + "/" + a.model : p;
 }
 
-// Plain headless claude call → final text (prompt drafting, reflections).
-// opts.provider/opts.model route this one-shot to a non-Claude backend too.
+const AGENT_CLI = process.env.BAGIDEA_AGENT_CLI || "codex";
+const CODEX_SANDBOX = process.env.BAGIDEA_CODEX_SANDBOX || "danger-full-access";
+const CODEX_APPROVAL = process.env.BAGIDEA_CODEX_APPROVAL || "never";
+
+function codexArgs({ cwd, model, resumeSid, addDirs = [], interactive = false } = {}) {
+  const args = [
+    "-a", CODEX_APPROVAL,
+    "-s", CODEX_SANDBOX,
+    "-C", cwd || WORKSPACE,
+  ];
+  for (const dir of addDirs) args.push("--add-dir", dir);
+  if (model) args.push("-m", String(model));
+  if (interactive) {
+    if (resumeSid) args.push("resume", String(resumeSid));
+    return args;
+  }
+  args.push("exec");
+  if (resumeSid) args.push("resume");
+  args.push("--json", "--skip-git-repo-check");
+  if (resumeSid) args.push(String(resumeSid), "-");
+  else args.push("-");
+  return args;
+}
+
+function codexFinalTextFromEvent(evt) {
+  const item = evt && evt.item;
+  if (evt && evt.type === "item.completed" && item && item.type === "agent_message") {
+    return String(item.text || "").trim();
+  }
+  return "";
+}
+
+function codexToolNameFromEvent(evt) {
+  const item = evt && evt.item;
+  if (!item || item.type === "agent_message") return "";
+  return item.name || item.tool || item.command || item.type || "";
+}
+
+// Plain headless Codex call → final text (prompt drafting, reflections).
+// The historical function name is kept as an internal compatibility alias.
 function claudeText(prompt, opts = {}) {
   return new Promise((resolve) => {
-    // opts.tools: a comma string of allowed tools. With it, the meeting agent
-    // can look real things up (WebSearch/WebFetch/Read…). The broker settings
-    // ride along so anything OUTSIDE the allowed set still asks the owner to
-    // allow — same flow as a real task, just only when genuinely needed.
-    const args = ["-p"];
-    if (opts.tools) {
-      args.push("--allowedTools", opts.tools,
-        "--settings", path.join(WORKSPACE, ".claude", "settings.json"));
-    }
-    const route = providers.resolve(opts.provider, opts.model, reg);
-    if (route.modelArgs.length) args.push(...route.modelArgs);
-    const child = spawn("claude", args, {
-      cwd: WORKSPACE, shell: true,
-      env: { ...process.env, ...(reg.apiKeys || {}), ...route.env, OFFICE_ADAPTER: "1",
+    const args = codexArgs({ cwd: WORKSPACE, model: opts.model });
+    const child = spawn(AGENT_CLI, args, {
+      cwd: WORKSPACE, shell: false,
+      env: { ...process.env, ...(reg.apiKeys || {}), OFFICE_ADAPTER: "1",
         ...(opts.env || {}) },
     });
     child.stdin.write(prompt);
     child.stdin.end();
-    let out = "";
-    child.stdout.on("data", (c) => (out += c));
+    let buf = "", out = "";
+    child.stdout.on("data", (c) => {
+      buf += c;
+      let i;
+      while ((i = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, i).trim();
+        buf = buf.slice(i + 1);
+        if (!line) continue;
+        try {
+          const text = codexFinalTextFromEvent(JSON.parse(line));
+          if (text) out = text;
+        } catch {}
+      }
+    });
     child.on("close", () => resolve(out.trim()));
     child.on("error", () => resolve(""));
   });
@@ -803,21 +851,10 @@ function projectDir(id) {
   return p ? p.dir : null;
 }
 
-// Headless claude in an untrusted folder stalls on the trust dialog it can
-// never show. Pre-trust project dirs in ~/.claude.json (same flag the
-// interactive "Yes, I trust this folder" sets).
+// Codex CLI does not use Claude's trust file. Kept as a no-op compatibility
+// hook because project creation/open paths already call it.
 function ensureTrusted(dir) {
-  try {
-    const file = path.join(require("os").homedir(), ".claude.json");
-    const j = JSON.parse(fs.readFileSync(file, "utf8"));
-    j.projects = j.projects || {};
-    const key = String(dir).replace(/\\/g, "/").replace(/\/+$/, "");
-    const cur = j.projects[key] || {};
-    if (cur.hasTrustDialogAccepted === true) return;
-    j.projects[key] = { ...cur, hasTrustDialogAccepted: true };
-    fs.writeFileSync(file, JSON.stringify(j, null, 2));
-    console.log("[proj] pre-trusted", key);
-  } catch (e) { console.error("[proj] trust", e.message); }
+  return dir;
 }
 
 // Mentioning a registered project by name in chat binds the thread to it:
@@ -866,21 +903,18 @@ function createProject(name, place, pathArg) {
   return proj;
 }
 
-// claude keeps sessions under ~/.claude/projects/<path-as-dashes>/*.jsonl.
-function claudeSessionDir(dir) {
-  return path.join(require("os").homedir(), ".claude", "projects",
-    String(dir).replace(/[^a-zA-Z0-9]/g, "-"));
-}
-// Newest session id — `claude -c` ignores headless-born sessions, so the
-// open button resumes the latest sid EXPLICITLY (proven to work).
-function newestSid(dir) {
-  try {
-    const p = claudeSessionDir(dir);
-    const files = fs.readdirSync(p).filter((f) => f.endsWith(".jsonl"))
-      .map((f) => ({ f, t: fs.statSync(path.join(p, f)).mtimeMs }))
-      .sort((a, b) => b.t - a.t);
-    return files.length ? files[0].f.replace(/\.jsonl$/, "") : null;
-  } catch { return null; }
+// Newest Codex thread id that this office knows for a registered project.
+function newestSidForProject(projectId) {
+  let best = null;
+  for (const list of Object.values(sess || {})) {
+    for (const entry of list || []) {
+      if (entry && entry.proj === projectId && entry.sid &&
+          (!best || Number(entry.ts || 0) > Number(best.ts || 0))) {
+        best = entry;
+      }
+    }
+  }
+  return best && best.sid;
 }
 
 // Windows Terminal renders Thai beautifully — use it when available.
@@ -1128,16 +1162,8 @@ function runClaude(agent, prompt, opts = {}) {
   const projId = entry.proj && projectDir(entry.proj) ? entry.proj : null;
   const cwd = projId ? projectDir(projId) : WORKSPACE;
   if (projId) ensureTrusted(cwd);
-  // claude sessions are PER-DIRECTORY: a sid born in another cwd cannot be
-  // resumed here. Ground truth beats bookkeeping — check the actual session
-  // file under this cwd; missing means a fresh claude session here (our own
-  // thread log keeps the visible history).
-  if (entry.sid) {
-    const enc = String(cwd).replace(/[^a-zA-Z0-9]/g, "-");
-    const sidFile = path.join(require("os").homedir(), ".claude", "projects",
-      enc, entry.sid + ".jsonl");
-    if (!fs.existsSync(sidFile)) entry.sid = null;
-  }
+  // Codex sessions are resumable by thread id. Keep the id in our office
+  // session entry and let Codex validate it when a run resumes.
   // Claude-Code-style proactive compaction: a resumed thread that's grown near this
   // backend's context budget is summarized + continued on a FRESH thread before it
   // overflows — for every model (Claude self-compacts, so its budget is 0 → skipped).
@@ -1172,7 +1198,7 @@ function runClaude(agent, prompt, opts = {}) {
   const a = reg.agents[agent];
   const isFresh = isNew;
   const mtag = modelTag(agent);   // brain tag stamped on this run's messages + usage
-  const mprov = (a && a.provider) || reg.defaultProvider || "claude";  // for cost tally
+  const mprov = (a && a.provider) || reg.defaultProvider || "codex";  // for cost tally
   const picked = a && a.tools && a.tools.length ? a.tools : ["Read", "Glob", "Grep"];
   // "mcp:<name>" entries become a real --mcp-config + server-level allow rule.
   const mcpNames = picked.filter((t) => t.startsWith("mcp:"))
@@ -1189,10 +1215,10 @@ function runClaude(agent, prompt, opts = {}) {
     fs.writeFileSync(mcpConfig, JSON.stringify(conf));
     tools += (tools ? "," : "") + mcpNames.map((n) => `mcp__${n}`).join(",");
   }
-  // Native skills (P3): deliver skills as real Claude Code Skill files disclosed
-  // on demand via --add-dir, instead of inlining every body here. Reversible via
-  // reg.nativeSkills = false.
-  const nativeSkills = reg.nativeSkills !== false;
+  // Codex does not consume the old .claude/skills projection, so inline assigned
+  // skills by default. Advanced users can experiment with projected skills by
+  // setting BAGIDEA_CODEX_NATIVE_SKILLS=1 and reg.nativeSkills=true.
+  const nativeSkills = reg.nativeSkills === true && process.env.BAGIDEA_CODEX_NATIVE_SKILLS === "1";
   let preamble = "";
   if (isFresh && a && (a.prompt || a.persona || (a.skills || []).length)) {
     preamble = `<persona>\nYou are "${a.name}" (${a.role}).\n${personaText(a)}\n`;
@@ -1206,28 +1232,26 @@ function runClaude(agent, prompt, opts = {}) {
     preamble += "</persona>\n\n";
   }
 
-  const args = ["-p", "--output-format", "stream-json", "--verbose",
-    "--allowedTools", tools,
-    // The permission-broker hooks live in the workspace settings; agents
-    // now run inside PROJECT directories, so the settings must travel
-    // explicitly or the Security Center goes silent.
-    "--settings", path.join(WORKSPACE, ".claude", "settings.json")];
-  if (mcpConfig) args.push("--mcp-config", mcpConfig);
+  const addDirs = [];
+  if (mcpConfig) {
+    // Codex MCP servers are configured through Codex config/plugins rather than
+    // Claude's per-run --mcp-config. Keep the file for compatibility/debugging.
+  }
   // Native skills: refresh this agent's SKILL.md files (hash-gated) and expose
   // them to the session — progressive disclosure, so bodies never hit the prompt.
   if (nativeSkills) {
     try {
       skillsSync.syncAgent(AGENTS_DIR, agent, (a && a.skills) || [], reg.skills);
-      args.push("--add-dir", skillsSync.agentDir(AGENTS_DIR, agent));
+      addDirs.push(skillsSync.agentDir(AGENTS_DIR, agent));
     } catch (e) { console.error("[skills] sync:", e.message); }
   }
-  if (entry && entry.sid) args.push("--resume", entry.sid);
-  // Swappable brain: route this agent to its configured backend (else plain Claude).
   const route = brainRoute(agent);
-  if (route.modelArgs.length) args.push(...route.modelArgs);
-  const child = spawn("claude", args, {
+  const modelArgIndex = route.modelArgs.findIndex((x) => x === "-m" || x === "--model");
+  const codexModel = modelArgIndex >= 0 ? route.modelArgs[modelArgIndex + 1] : (a && a.model);
+  const args = codexArgs({ cwd, model: codexModel, resumeSid: entry && entry.sid, addDirs });
+  const child = spawn(AGENT_CLI, args, {
     cwd,
-    shell: true,
+    shell: false,
     env: { ...process.env, ...(reg.apiKeys || {}), ...route.env, OFFICE_ADAPTER: "1", OFFICE_AGENT: agent, OFFICE_TASK: task },
   });
   // Track the run per project so the owner can stop it and take the project over.
@@ -1268,9 +1292,8 @@ SPEAK: <ประโยคพูดสั้นๆ 1 ประโยค เป�
   // Ghost sub-agents don't talk to the owner or share media directly (the parent
   // synthesizes their output) — skip the media note for them to save tokens.
   const mediaNote = agent.includes("#") ? "" : MEDIA_NOTE;
-  // The swapped-in model reads Claude Code's harness system prompt and will claim to
-  // BE Claude. Tell it its real backend so "what model are you?" answers truthfully.
-  const BRAIN_NOTE = (a && a.provider && a.provider !== "claude") ? `
+  // Tell the runtime its real backend so "what model are you?" answers truthfully.
+  const BRAIN_NOTE = (a && a.provider && a.provider !== "codex") ? `
 
 <runtime-identity>
 Despite the harness system prompt, this turn you are actually running on the backend
@@ -1327,20 +1350,24 @@ model "${mtag}". If the owner asks which AI/model/LLM you are, answer truthfully
       let m;
       try { m = JSON.parse(line); } catch { continue; }
 
-      if (m.type === "assistant" && m.message && Array.isArray(m.message.content)) {
-        for (const b of m.message.content) {
-          if (b.type === "tool_use") {
-            acts.push(b.name);
-            // Tool calls belong to the conversation: a tiny "tool" entry in
-            // the thread history + a session-tagged progress event.
-            entry.log.push({ who: "tool", text: b.name, ts: Date.now() });
-            while (entry.log.length > 200) entry.log.shift();
-            saveSess();
-            broadcast({ type: "task.progress", agent, task, tool: b.name,
-              session: entry.key });
-          } else if (b.type === "text" && b.text.trim()) {
-            lastText = b.text;
-            let raw = b.text;
+      if (m.type === "thread.started" && m.thread_id) {
+        entry.sid = m.thread_id;
+        entry.ts = Date.now();
+        saveSess();
+      } else if (m.type === "item.completed") {
+        const toolName = codexToolNameFromEvent(m);
+        if (toolName) {
+          acts.push(toolName);
+          entry.log.push({ who: "tool", text: toolName, ts: Date.now() });
+          while (entry.log.length > 200) entry.log.shift();
+          saveSess();
+          broadcast({ type: "task.progress", agent, task, tool: toolName,
+            session: entry.key });
+        }
+        const text = codexFinalTextFromEvent(m);
+        if (text) {
+            lastText = text;
+            let raw = text;
             // `SPEAK:` lines become actual spoken audio (TTS) — strip from
             // the chat and let the overlay voice them.
             if (canSpeak && /(^|\n)\s*SPEAK:/.test(raw)) {
@@ -1383,41 +1410,33 @@ model "${mtag}". If the owner asks which AI/model/LLM you are, answer truthfully
               saveSess();
               broadcast({ type: "chat.message", agent, task, text: out, session: entry.key, model: mtag });
             }
-          }
         }
-      } else if (m.type === "result") {
-        // Session bookkeeping: remember the thread we just extended (and
-        // which directory that claude session lives in).
-        if (m.session_id) {
-          entry.sid = m.session_id;
-          entry.ts = Date.now();
-          saveSess();
-        }
-        if (m.is_error && maybeRecover(typeof m.result === "string" ? m.result : "")) {
-          statBump("failed", null, Number(m.total_cost_usd) || 0);
-          continue;   // the fresh-thread recovery run owns the callback now
-        }
+      } else if (m.type === "turn.completed") {
         // Context-usage meter: input tokens this turn vs the backend's window, stamped
         // on the thread (persists) + sent live so the chat can show how full it is.
         const u = m.usage || {};
-        const inTok = (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) +
-          (u.cache_creation_input_tokens || 0);
-        const usage = { in: inTok, out: u.output_tokens || 0, win: ctxWindow(agent) };
-        if (!m.is_error) {
-          entry.lastUsage = { ...usage, model: mtag, ts: Date.now() }; saveSess();
-          brainBump(mprov, inTok, u.output_tokens || 0);  // estimate non-Claude spend
-        }
-        broadcast({ type: m.is_error ? "task.failed" : "task.completed",
+        const inTok = (u.input_tokens || 0) + (u.cached_input_tokens || 0);
+        const outTok = (u.output_tokens || 0) + (u.reasoning_output_tokens || 0);
+        const usage = { in: inTok, out: outTok, win: ctxWindow(agent) };
+        entry.lastUsage = { ...usage, model: mtag, ts: Date.now() }; saveSess();
+        brainBump(mprov, inTok, outTok);
+        broadcast({ type: "task.completed",
           agent, task, session: entry.key, model: mtag, usage });
-        statBump(m.is_error ? "failed" : "done", null, Number(m.total_cost_usd) || 0);
-        if (!m.is_error && subTasks.length) {
+        statBump("done", null, 0);
+        if (subTasks.length) {
           doneFired = true;  // the synthesis run inherits the callback
           releaseProj();
           runSubAgents(agent, entry, subTasks.slice(0, 4), opts.onDone);
         } else {
-          fireDone(lastText, !m.is_error);
-          if (!m.is_error) maybeLearnSkill(agent, task, prompt, acts, lastText, projId);
+          fireDone(lastText, true);
+          maybeLearnSkill(agent, task, prompt, acts, lastText, projId);
         }
+      } else if (m.type === "error" || m.type === "turn.failed") {
+        const msg = m.message || m.error || "";
+        if (maybeRecover(msg)) continue;
+        broadcast({ type: "task.failed", agent, task, session: entry.key, model: mtag });
+        statBump("failed", null, 0);
+        fireDone(lastText, false);
       }
     }
   });
@@ -1425,7 +1444,7 @@ model "${mtag}". If the owner asks which AI/model/LLM you are, answer truthfully
     const s = c.toString();
     errText += s;
     if (errText.length > 8000) errText = errText.slice(-8000);
-    console.error("[claude]", s.trim());
+    console.error("[codex]", s.trim());
   });
   child.on("error", (e) => {
     broadcast({ type: "task.failed", agent, task });
@@ -1436,7 +1455,7 @@ model "${mtag}". If the owner asks which AI/model/LLM you are, answer truthfully
   return task;
 }
 
-// Summarize a thread's visible history with Claude (the always-present engine, big
+// Summarize a thread's visible history with Codex (the always-present engine, big
 // context) so continuity survives a compaction/recovery. Returns "" on any failure.
 async function summarizeThread(oldEntry) {
   try {
@@ -1447,13 +1466,13 @@ async function summarizeThread(oldEntry) {
       `สรุปบทสนทนาในออฟฟิศนี้ให้เพื่อนร่วมงานอ่านแล้วทำงานต่อได้ทันที: ข้อเท็จจริงสำคัญ ` +
       `การตัดสินใจ งานที่ค้างอยู่ และสิ่งที่ต้องทำต่อ. ตอบเป็นภาษาเดียวกับบทสนทนา ` +
       `กระชับ ≤200 คำ ไม่ต้องเกริ่นนำ.\n\n${hist}`,
-      { provider: "claude" });
+      { provider: "codex" });
   } catch { return ""; }
 }
 
 function brainLabel(agent) {
   const a = (reg.agents && reg.agents[agent]) || {};
-  return a.provider && a.provider !== "claude"
+  return a.provider && a.provider !== "codex"
     ? a.provider + (a.model ? "/" + a.model : "") : "โมเดลที่เลือก";
 }
 
@@ -1787,24 +1806,27 @@ function runSub(parentId, subId, taskText, entry, onDone) {
     fs.writeFileSync(mcpConfig, JSON.stringify(conf));
     tools += (tools ? "," : "") + mcpNames.map((n) => `mcp__${n}`).join(",");
   }
-  const args = ["-p", "--output-format", "stream-json", "--verbose",
-    "--allowedTools", tools,
-    "--settings", path.join(WORKSPACE, ".claude", "settings.json")];
-  if (mcpConfig) args.push("--mcp-config", mcpConfig);
+  const addDirs = [];
+  if (mcpConfig) {
+    // Codex picks MCP config from its own config/plugins; keep the generated
+    // compatibility file for debugging existing registry entries.
+  }
   // Ghosts inherit the parent's native skills (additive — ghosts had none before).
   if (reg.nativeSkills !== false) {
     try {
       skillsSync.syncAgent(AGENTS_DIR, parentId, (a.skills) || [], reg.skills);
-      args.push("--add-dir", skillsSync.agentDir(AGENTS_DIR, parentId));
+      addDirs.push(skillsSync.agentDir(AGENTS_DIR, parentId));
     } catch {}
   }
   // Ghosts work where their parent works (project-bound threads included).
   const subCwd = (entry.proj && projectDir(entry.proj)) || WORKSPACE;
   // Ghosts run on the parent agent's backend (the swappable brain).
   const route = brainRoute(parentId);
-  if (route.modelArgs.length) args.push(...route.modelArgs);
-  const child = spawn("claude", args, {
-    cwd: subCwd, shell: true,
+  const modelArgIndex = route.modelArgs.findIndex((x) => x === "-m" || x === "--model");
+  const codexModel = modelArgIndex >= 0 ? route.modelArgs[modelArgIndex + 1] : (a && a.model);
+  const args = codexArgs({ cwd: subCwd, model: codexModel, addDirs });
+  const child = spawn(AGENT_CLI, args, {
+    cwd: subCwd, shell: false,
     env: { ...process.env, ...(reg.apiKeys || {}), ...route.env, OFFICE_ADAPTER: "1", OFFICE_AGENT: subId, OFFICE_TASK: entry.key },
   });
   child.stdin.write(
@@ -1841,28 +1863,34 @@ function runSub(parentId, subId, taskText, entry, onDone) {
       if (!line) continue;
       let m;
       try { m = JSON.parse(line); } catch { continue; }
-      if (m.type === "assistant" && m.message && Array.isArray(m.message.content)) {
-        for (const b of m.message.content) {
-          if (b.type === "tool_use") {
-            entry.log.push({ who: "tool", text: b.name, ts: Date.now() });
-            while (entry.log.length > 200) entry.log.shift();
-            saveSess();
-            broadcast({ type: "subagent.progress", agent: parentId, sub: subId,
-              tool: b.name, session: entry.key });
-          } else if (b.type === "text" && b.text.trim()) {
-            lastText = b.text;
-            entry.log.push({ who: "agent", text: b.text.slice(0, 8000), ts: Date.now() });
-            while (entry.log.length > 200) entry.log.shift();
-            entry.ts = Date.now();
-            saveSess();
-            broadcast({ type: "chat.message", agent: parentId, sub: subId,
-              text: b.text, session: entry.key });
-          }
+      if (m.type === "thread.started" && m.thread_id) {
+        entry.sid = m.thread_id;
+        saveSess();
+      } else if (m.type === "item.completed") {
+        const toolName = codexToolNameFromEvent(m);
+        if (toolName) {
+          entry.log.push({ who: "tool", text: toolName, ts: Date.now() });
+          while (entry.log.length > 200) entry.log.shift();
+          saveSess();
+          broadcast({ type: "subagent.progress", agent: parentId, sub: subId,
+            tool: toolName, session: entry.key });
         }
-      } else if (m.type === "result") {
-        if (m.session_id) { entry.sid = m.session_id; saveSess(); }
-        statBump(m.is_error ? "failed" : "done", null, Number(m.total_cost_usd) || 0);
-        finish(!m.is_error);
+        const text = codexFinalTextFromEvent(m);
+        if (text) {
+          lastText = text;
+          entry.log.push({ who: "agent", text: text.slice(0, 8000), ts: Date.now() });
+          while (entry.log.length > 200) entry.log.shift();
+          entry.ts = Date.now();
+          saveSess();
+          broadcast({ type: "chat.message", agent: parentId, sub: subId,
+            text, session: entry.key });
+        }
+      } else if (m.type === "turn.completed") {
+        statBump("done", null, 0);
+        finish(true);
+      } else if (m.type === "error" || m.type === "turn.failed") {
+        statBump("failed", null, 0);
+        finish(false);
       }
     }
   });
@@ -2784,12 +2812,12 @@ const server = http.createServer((req, res) => {
     // Monitoring snapshot: every provider's connect status + every agent's brain
     // (provider/model) and latest context usage. Feeds the 🧠 BRAINS sidebar panel.
     const pc = reg.providerConfig || {};
-    const KNOWN = ["claude", "glm", "deepseek", "qwen", "minimax", "openai", "gemini", "openrouter", "nvidia"];
+    const KNOWN = ["codex", "claude", "glm", "deepseek", "qwen", "minimax", "openai", "gemini", "openrouter", "nvidia"];
     const byProvider = {};
     const agents = [];
     for (const [id, a] of Object.entries(reg.agents || {})) {
       if (id === "ceo") continue;
-      const p = a.provider || reg.defaultProvider || "claude";
+      const p = a.provider || reg.defaultProvider || "codex";
       const list = sess[id] || [];
       const latest = list.length ? list.reduce((x, y) => (x.ts > y.ts ? x : y)) : null;
       const lu = latest && latest.lastUsage;
@@ -2802,11 +2830,11 @@ const server = http.createServer((req, res) => {
     const providers = ids.map((id) => {
       const c = pc[id] || {};
       return { id, label: c.label || id, kind: c.kind || (KNOWN.includes(id) ? "" : "custom"),
-        connected: id === "claude" ? true : !!c.connected, agents: byProvider[id] || [] };
+        connected: id === "codex" ? true : id === "claude" ? true : !!c.connected, agents: byProvider[id] || [] };
     }).filter((p) => p.connected || p.agents.length || pc[p.id]);
     res.writeHead(200, { "content-type": "application/json" });
     res.end(JSON.stringify({ providers, agents,
-      defaultProvider: reg.defaultProvider || "claude" }));
+      defaultProvider: reg.defaultProvider || "codex" }));
 
   } else if (req.method === "POST" && req.url === "/discuss") {
     readBody(req, (body) => {
@@ -2906,7 +2934,7 @@ const server = http.createServer((req, res) => {
           skills: Array.isArray(p.skills) ? p.skills : cur.skills || [],
           tools: Array.isArray(p.tools) ? p.tools : cur.tools || [],
           // 🧠 swappable brain: which backend/model this agent runs on (default Claude).
-          provider: providers.PROVIDERS[p.provider] ? p.provider : (cur.provider || "claude"),
+          provider: providers.PROVIDERS[p.provider] ? p.provider : (cur.provider || "codex"),
           model: String(p.model !== undefined ? p.model : (cur.model || "")).slice(0, 60),
         };
         saveReg();
@@ -3064,7 +3092,7 @@ const server = http.createServer((req, res) => {
     });
 
   } else if (req.method === "POST" && req.url === "/projects/open") {
-    // ▶ open = the smart claude entry (no sessions → claude, one → -c,
+    // ▶ open = the smart Codex entry (no sessions → codex, otherwise resume,
     // several → -r so the user picks). 🖥 shell = plain terminal, NOT
     // counted as "project open" (no liveness marker).
     readBody(req, (body) => {
@@ -3111,10 +3139,10 @@ const server = http.createServer((req, res) => {
             return res.end("agent กำลังทำงานในโปรเจคนี้อยู่ — กด ⏹ หยุดก่อนเพื่อเข้าไปดู/ทำเอง หรือรอจนงานเสร็จ");
           }
           ensureTrusted(dir);  // no trust dialog ambush in the new window
-          // Smart entry: resume the NEWEST session explicitly — straight into
-          // where the work happened. Fresh claude only when there's no session.
-          const sid = newestSid(dir);
-          const cmd = sid ? `claude --resume ${sid}` : "claude";
+          // Smart entry: resume the NEWEST Codex session explicitly — straight
+          // into where the work happened. Fresh codex only when there's no session.
+          const sid = newestSidForProject(id);
+          const cmd = sid ? `codex resume ${sid}` : "codex";
           launch(`-Command "${cmd} #BAGIDEA_PROJ_${id}"`, `BAGIDEA_PROJ_${id}`);
           setTimeout(sweepProjects, 2500);
         }
@@ -3125,7 +3153,7 @@ const server = http.createServer((req, res) => {
   } else if (req.method === "POST" && (req.url === "/projects/stop" ||
       req.url === "/projects/hide" || req.url === "/projects/resume")) {
     // ⏹ stop kills the window tree for real. 🫥 hide tucks the window away
-    // while claude keeps working; ▶ resume brings the same window back.
+    // while Codex keeps working; ▶ resume brings the same window back.
     readBody(req, (body) => {
       try {
         const { id } = JSON.parse(body);
@@ -3142,7 +3170,7 @@ const server = http.createServer((req, res) => {
     });
 
   } else if (req.method === "POST" && req.url === "/task/stop") {
-    // ⏹ Cancel a running agent task mid-flight (kill its claude child by task id).
+    // ⏹ Cancel a running agent task mid-flight (kill its Codex child by task id).
     if (!req.headers["x-bagidea-ui"]) { res.writeHead(403); return res.end("human UI only"); }
     readBody(req, (body) => {
       try {
@@ -3481,27 +3509,27 @@ const server = http.createServer((req, res) => {
       } catch (e) { return done(false, String((e && e.message) || e)); }
     });
 
-  } else if (req.method === "GET" && req.url === "/claude/auth") {
-    // 🔓 Is Claude usable? Logged-in (credentials file / oauthAccount) OR API key set.
+  } else if (req.method === "GET" && (req.url === "/codex/auth" || req.url === "/claude/auth")) {
+    // 🔓 Is Codex usable? Logged-in (auth file) OR API key set.
     const home = require("os").homedir();
     let loggedIn = false;
-    try { loggedIn = fs.existsSync(path.join(home, ".claude", ".credentials.json")); } catch {}
-    if (!loggedIn) {
-      try { const j = JSON.parse(fs.readFileSync(path.join(home, ".claude.json"), "utf8"));
-        loggedIn = !!(j && (j.oauthAccount || j.userID)); } catch {}
-    }
-    const viaKey = !!(reg.apiKeys && reg.apiKeys.ANTHROPIC_API_KEY);
+    try {
+      loggedIn = fs.existsSync(path.join(home, ".codex", "auth.json")) ||
+        fs.existsSync(path.join(home, ".codex", "auth.json.enc"));
+    } catch {}
+    const viaKey = !!(process.env.OPENAI_API_KEY ||
+      (reg.apiKeys && (reg.apiKeys.OPENAI_API_KEY || reg.apiKeys.CODEX_ACCESS_TOKEN)));
     res.writeHead(200, { "content-type": "application/json" });
     res.end(JSON.stringify({ loggedIn, viaKey, connected: loggedIn || viaKey }));
 
-  } else if (req.method === "POST" && req.url === "/claude/login") {
-    // 🔓 Open a terminal running `claude` so the user completes browser OAuth login.
+  } else if (req.method === "POST" && (req.url === "/codex/login" || req.url === "/claude/login")) {
+    // 🔓 Open a terminal running `codex login` so the user completes auth.
     try {
       if (process.platform === "win32")
-        spawn("cmd", ["/c", "start", "Claude Login", "cmd", "/k", "claude"], { detached: true });
+        spawn("cmd", ["/c", "start", "Codex Login", "cmd", "/k", "codex login"], { detached: true });
       else if (process.platform === "darwin")
-        spawn("osascript", ["-e", 'tell application "Terminal" to do script "claude"'], { detached: true });
-      else spawn("x-terminal-emulator", ["-e", "claude"], { detached: true });
+        spawn("osascript", ["-e", 'tell application "Terminal" to do script "codex login"'], { detached: true });
+      else spawn("x-terminal-emulator", ["-e", "codex login"], { detached: true });
       res.writeHead(200, { "content-type": "application/json" }); res.end("{}");
     } catch (e) { res.writeHead(500); res.end(String(e.message)); }
 

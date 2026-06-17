@@ -9,7 +9,7 @@ You are working on this repository only:
 - Product: BagIdea Office
 - Never use another repo or placeholder branch name.
 
-BagIdea Office is a living 2.5D AI office that runs as a desktop wallpaper. It combines a Godot 4 world, a Node.js daemon, a Rust desktop shell, a command-line tool, plugins, docs, and a static website. The product turns Claude Code sessions, headless agent work, approvals, meetings, channels, voice, plugins, and project activity into an in-world office with agents, desks, rooms, a live activity feed, and real work delegation.
+BagIdea Office is a living 2.5D AI office that runs as a desktop wallpaper. It combines a Godot 4 world, a Node.js daemon, a Rust desktop shell, a command-line tool, plugins, docs, and a static website. The product turns Codex CLI sessions, headless agent work, approvals, meetings, channels, voice, plugins, and project activity into an in-world office with agents, desks, rooms, a live activity feed, and real work delegation.
 
 1. PROJECT SOURCE OF TRUTH RULE (MANDATORY)
 

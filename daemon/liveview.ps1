@@ -1,5 +1,6 @@
-﻿# Live project viewer — opened by the play button while an AGENT is working
-# in the project. Tails the agent's claude session (pretty-printed) so the
+﻿# daemon/liveview.ps1
+# Live project viewer — opened by the play button while an AGENT is working
+# in the project. Tails the legacy jsonl session view when available so the
 # owner watches the real work, and the moment the daemon reports the run
 # finished, this SAME window resumes the SAME session interactively.
 # One project = one window, no forked sessions.
@@ -69,4 +70,4 @@ Write-Host ""
 
 $f = Get-ChildItem -Path $Dir -Filter *.jsonl -ErrorAction SilentlyContinue |
   Sort-Object LastWriteTime -Descending | Select-Object -First 1
-if ($f) { claude --resume $f.BaseName } else { claude }
+if ($f) { codex resume $f.BaseName } else { codex }

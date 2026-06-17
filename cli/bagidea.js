@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// cli/bagidea.js
 // bagidea — command line for the BagIdea Office.
 // Zero dependencies. Talks to the daemon on :8787; can launch the suite.
 
@@ -278,7 +279,7 @@ if (cmd === "uninstall") {
     if (rest.includes("-y") || rest.includes("--yes")) return go();
     warn(`This removes BagIdea Office — app files, PATH entry, Start Menu shortcut, autostart`
       + (keepData ? " (your data is backed up first)." : ", AND your data (agents, projects, keys)."));
-    info("It does NOT remove Git / Node / Rust / Claude (shared tools).");
+    info("It does NOT remove Git / Node / Rust / Codex (shared tools).");
     const rl = require("readline").createInterface({ input: process.stdin, output: process.stdout });
     rl.question(`  ${c.warn}Type 'yes' to uninstall:${c.reset} `, (ans) => {
       rl.close();
@@ -321,7 +322,7 @@ if (cmd === "uninstall") {
     console.log(`\n  ${c.bold}Today${c.reset}  ${c.bold}${today.runs}${c.reset} jobs   ${c.ok}✓ ${today.done}${c.reset}  ${c.err}✗ ${today.failed}${c.reset}   ${c.warn}$${(today.cost || 0).toFixed(2)}${c.reset}   ${c.gray}uptime ${Math.floor(s.uptimeSec / 3600)}h ${Math.floor((s.uptimeSec % 3600) / 60)}m${c.reset}`);
     {
       const g = (today.aux && today.aux.gemini) || 0, o = (today.aux && today.aux.openai) || 0, cl = today.cost || 0;
-      console.log(`  ${c.gray}spend  Claude $${cl.toFixed(2)} · Gemini ≈$${g.toFixed(3)} · OpenAI ≈$${o.toFixed(3)} · total ≈$${(cl + g + o).toFixed(2)}  (Gemini/OpenAI are estimates)${c.reset}`);
+      console.log(`  ${c.gray}spend  Codex $${cl.toFixed(2)} · Gemini ≈$${g.toFixed(3)} · OpenAI ≈$${o.toFixed(3)} · total ≈$${(cl + g + o).toFixed(2)}  (Gemini/OpenAI are estimates)${c.reset}`);
     }
     head("Last 7 days");
     const maxR = Math.max(1, ...s.days.map((d) => d.runs));

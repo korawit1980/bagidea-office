@@ -1,28 +1,29 @@
+// daemon/providers.js
 "use strict";
 // ---------------------------------------------------------------------------
 // Per-agent model/provider routing — the office's "swappable brain".
 //
-// The agent runtime is ALWAYS the Claude Code CLI (`claude -p`): it owns the
-// tools, the agentic loop, skills, sessions. Only the *model behind it* changes.
-// `claude` is just a client — point ANTHROPIC_BASE_URL at another endpoint and it
-// talks to that backend instead, authenticated with ANTHROPIC_AUTH_TOKEN. So
-// switching an agent to GLM/Qwen/DeepSeek/MiniMax is purely env + --model.
+// The agent runtime is Codex CLI (`codex exec --json`): it owns the agentic loop,
+// tools, sessions, and project work. Older provider entries are retained as
+// UI/registry metadata for existing installs, but Codex is the default engine.
 //
 //   • Anthropic-format providers (direct: true)  → ANTHROPIC_BASE_URL straight at
 //     their Anthropic-compatible endpoint. No proxy.
 //   • OpenAI-format providers   (needsProxy: true) → ANTHROPIC_BASE_URL at a local
 //     LiteLLM gateway that translates Anthropic <-> OpenAI (wired in P3).
 //
-// FAIL-OPEN: an unconfigured, unknown, or "claude" provider returns empty
-// overrides, so the spawn is byte-identical to today's plain-Claude behavior.
-// (A *configured* provider with a bad token will fail that run — same as a bad
-// Claude key today; we do not silently re-route to Claude.)
+// FAIL-OPEN: an unconfigured, unknown, or "codex" provider returns empty
+// overrides, so the spawn remains a plain Codex CLI run.
 // ---------------------------------------------------------------------------
 
 // Catalog. `baseUrl` filled only where the endpoint is confirmed; the rest are
 // supplied via reg.providerConfig[id].baseUrl (verified per-provider in P2).
 // `models` is a hint list for the settings UI — any string is accepted.
 const PROVIDERS = {
+  codex: {
+    label: "Codex CLI", format: "codex", direct: true, baseUrl: null,
+    models: ["", "gpt-5", "gpt-5-codex", "o4-mini"],
+  },
   claude: {
     label: "Claude · Anthropic", format: "anthropic", direct: true, baseUrl: null,
     models: ["", "opus", "sonnet", "haiku",
@@ -73,8 +74,8 @@ const PROVIDERS = {
 const DEFAULT_LITELLM = "http://127.0.0.1:4000";
 
 // resolve(provider, model, reg) -> { ok, env, modelArgs, reason }
-//   env       : object spread into the child's env (ANTHROPIC_BASE_URL/_AUTH_TOKEN)
-//   modelArgs : [] or ["--model", "<id>"] pushed into the claude argv
+//   env       : object spread into the child's env
+//   modelArgs : [] or ["-m", "<id>"] translated by the Codex adapter
 //   reg.providerConfig = {
 //     glm:      { token, baseUrl?, model? },
 //     deepseek: { token, baseUrl?, model? },
@@ -82,12 +83,12 @@ const DEFAULT_LITELLM = "http://127.0.0.1:4000";
 //     ...
 //   }
 function resolve(provider, model, reg = {}, opts = {}) {
-  const out = { ok: true, env: {}, modelArgs: [], reason: "claude-default" };
+  const out = { ok: true, env: {}, modelArgs: [], reason: "codex-default" };
   const pConf = (reg && reg.providerConfig) || {};
 
-  // Default brain: plain Claude. Optional explicit model only.
-  if (!provider || provider === "claude") {
-    if (model) out.modelArgs = ["--model", String(model)];
+  // Default brain: plain Codex. Optional explicit model only.
+  if (!provider || provider === "codex") {
+    if (model) out.modelArgs = ["-m", String(model)];
     return out;
   }
 

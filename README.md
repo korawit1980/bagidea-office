@@ -1,13 +1,14 @@
+<!-- README.md -->
 # BagIdea Office
 
-> **A living, 2.5D Claude Office that runs as your desktop wallpaper** — a team
+> **A living, 2.5D AI Office that runs as your desktop wallpaper** — a team
 > of AI agents with real presence that work, learn and grow alongside you.
 > Every agent walks to its desk when real work starts, asks permission at the
 > Security desk, holds meetings, learns new skills, and the lights follow your
 > real local time.
 
 Not a dashboard. Not a chat window. A **world** that renders the true state of
-your Claude agents — Claude Code sessions, headless runs, custom scripts — as
+your Codex-powered agents — Codex CLI sessions, headless runs, custom scripts — as
 living pixel-art employees behind your desktop icons, and gives them a **society**.
 Build a big enough team and they grow their own AI social life: they chat, play,
 learn how to work together, and learn about *you*. Many of their meetings happen
@@ -22,7 +23,7 @@ in most of what those two do, then goes further: with your permission the agents
 **actually create and finish real projects**, and even **propose and write their
 own plugins** (you approve each one) that extend the office for real.
 
-**To run it you need [Claude Code](https://claude.com/claude-code).** For the
+**To run it you need [Codex CLI](https://developers.openai.com/codex/cli).** For the
 *full* experience, add your **Gemini + OpenAI** API keys in settings — that
 unlocks agent voices, voice commands, realtime calls and image generation, and
 the office truly comes alive.
@@ -216,10 +217,10 @@ Sponsorship is a **recurring monthly subscription handled entirely by GitHub Spo
 - WebSocket event hub — the Godot world and the overlay UI subscribe to one stream
 - **Event journal** (`journal.jsonl`) with replay on connect: restart anything, state comes back — auto-trimmed on boot (and stale chat threads pruned) so nothing grows unbounded on a long-running office
 - **Agent registry** (`registry.json`): persistent staff — name, job title, avatar, aura, system prompt, skills, tools. `main` (the Director — **Shino** by default: your playful-but-focused second-in-command, tuned for delegation over hands-on work) and `ceo` (you) are protected and cannot be deleted. A fresh install starts with just these two
-- **Claude Code adapter**: `POST /chat` spawns a real headless `claude -p` session with the agent's persona, assigned skills and allowed tools; stream-json output becomes world events
+- **Codex CLI adapter**: `POST /chat` spawns a real headless `codex exec --json` session with the agent's persona, assigned skills and project context; JSONL output becomes world events
 - **Chat threads**: every conversation is a named, resumable session (`--resume`) with its own recorded history; agents keep continuous memory by default
 - **Skills library** with **Hermes-style auto-learning**: after a completed multi-tool task, a reflection pass decides whether the work distills into a reusable skill — if so it's saved, auto-assigned, and announced in the office
-- **Tools**: per-agent allowlist over the built-in Claude Code tools, plus custom capability via **MCP servers** (name + launch command → injected with `--mcp-config`)
+- **Tools**: agents use Codex CLI's native tool loop; custom capability can still be modeled through **MCP servers** and plugin commands
 - **CEO chain of command**: ordering the CEO summons the Director — he walks over, takes the order, replies with a plan, and dispatches work to teammates via `DELEGATE:` lines (each spawns a real session, with the hand-over walk acted out). Delegation is a **round trip**: every delegate's result is reported back to the Director, who can answer questions / follow up with more `DELEGATE:` lines (bounded depth, serialized turns), and finally walks the CEO-readable summary over to the boss (`ceo.report`)
 - **Agent discussions**: pick 2–4 agents and a topic — they hold a real meeting, round-robin turns over a shared transcript, minutes on the in-world whiteboard
 - **Self-splitting sub-agents**: every session is told it may end a reply with `SUB: <job>` lines (2–4) when the request parallelizes — the daemon strips the protocol, spawns parallel clone sessions with the parent's persona + tools, records each in a labeled 👻 session, and resumes the parent for a final synthesis once all ghosts report back (a stuck ghost is reaped after 6 min, so synthesis always happens)
@@ -227,9 +228,9 @@ Sponsorship is a **recurring monthly subscription handled entirely by GitHub Spo
 - **Shared note board**: notes live in the UI *and* in `workspace/notes.md` — agents read it and append bullets themselves (file-watched both ways)
 - **Calendar with a personal touch**: appointments remind you via the Director — he physically walks over and tells you (`reminder` event), N minutes ahead
 - **Director heartbeat**: every 15/30/60 minutes (configurable) he reviews the calendar, standing jobs and the note board — and pings you ONLY when something deserves it ("OK" stays silent)
-- **Claude Code hooks integration**: any Claude Code session in this project reports its tool calls — your real work animates the Director automatically
+- **Codex CLI integration**: office-spawned Codex sessions report messages, tool progress and completion back into the world
 - **Permission broker**: tools you *granted* in an agent's profile run silently; anything else is held until you approve — with a **✓✓ forever** option that remembers the grant
-- **📁 Projects**: register real folders as projects (with PLACE shorthands like `"ห้องเรียน" → D:\Learning`); the Director creates new ones himself via a `PROJECT:` protocol line and routes work with `DELEGATE: <agent> @ <project> :: <job>` — the assignee's claude session lives **inside** that directory and is resumable by you. One window per project: ▶ opens (or surfaces) *the* window. **One occupant at a time** — while an agent works the project you can't open it (the row shows a **⏹ stop agent** button with a two-click confirm to take over), and while you have it open an agent won't be dispatched into it. Removing/deleting a project also closes its window; disk-deletes sweep leftover dev servers first
+- **📁 Projects**: register real folders as projects (with PLACE shorthands like `"ห้องเรียน" → D:\Learning`); the Director creates new ones himself via a `PROJECT:` protocol line and routes work with `DELEGATE: <agent> @ <project> :: <job>` — the assignee's Codex session lives **inside** that directory and is resumable by you. One window per project: ▶ opens (or surfaces) *the* window. **One occupant at a time** — while an agent works the project you can't open it (the row shows a **⏹ stop agent** button with a two-click confirm to take over), and while you have it open an agent won't be dispatched into it. Removing/deleting a project also closes its window; disk-deletes sweep leftover dev servers first
 - **📨 Channels**: Telegram (long-poll), Discord (native gateway client) and LINE (webhook) feed straight into the Director — order your office from your phone, the reply comes back on the same channel
 - **🔑 API key vault**: store `OPENAI_API_KEY` & friends once; they're injected into every agent run's environment, and agents are told which names exist
 - **♻️ Self-healing daemon**: a watchdog respawns the daemon if it ever dies, and `bagidea restart` is more resilient — the office stays up on its own
@@ -276,8 +277,8 @@ Served by the daemon at `http://127.0.0.1:8787/` — best experienced through th
 ┌────────────┴─────────────────────────────────────────────┴───────────────────────┐
 │  DAEMON (Node.js, zero-dep)                    http://127.0.0.1:8787              │
 │  • broadcast + journal.jsonl (replay on connect) + registry.json + sessions.json  │
-│  • POST /chat  → headless `claude -p` (persona+skills+tools, --resume threads)    │
-│  • POST /event ← Claude Code hooks (your own sessions feed the world)             │
+│  • POST /chat  → headless `codex exec --json` (persona+skills, resumable threads) │
+│  • POST /event ← adapter events (sessions feed the world)                         │
 │  • POST /perm/request ←(long-poll)─ PreToolUse hook   POST /perm/respond ← UI     │
 │  • /registry/* CRUD · /sessions/* · /discuss · /assist/prompt · /map/bg           │
 └───────────────────────────────────────────────────────────────────────────────────┘
@@ -295,7 +296,7 @@ Three independent processes: the **daemon** keeps agents running even if renderi
 │   ├── constants.js               … shared office constants (skills, tools, agents)
 │   ├── tests/                     … automated API tests (node --test)
 │   ├── overlay.html               … Layer-2 web overlay (served at /)
-│   ├── hook.ps1 / perm.ps1        … Claude Code hook forwarders
+│   ├── hook.ps1 / perm.ps1        … legacy hook forwarders
 │   ├── send.js                    … test event CLI
 │   ├── registry.json              … your staff (generated at first run, gitignored)
 │   └── sessions.json              … chat threads + history (generated, gitignored)
@@ -320,9 +321,7 @@ Three independent processes: the **daemon** keeps agents running even if renderi
 ├── installer/                 ← install.ps1 (clone+build) · update.ps1 · build-release.ps1
 ├── web/                       ← official website (landing + browsable docs, static host)
 ├── tools/wallpaper.ps1        ← manual attach/detach (the shell does this natively)
-├── workspace/                 ← cwd for adapter-spawned Claude sessions
-│   └── .claude/settings.json      … PreToolUse permission hook wiring
-└── .claude/settings.json      ← hooks: your Claude Code sessions → the office
+└── workspace/                 ← cwd for adapter-spawned Codex sessions
 ```
 
 ## Requirements
@@ -332,7 +331,7 @@ Three independent processes: the **daemon** keeps agents running even if renderi
 | OS | Windows 11 / macOS 13+ (wallpaper backend: WorkerW / DYLD shim) |
 | Renderer | [Godot 4.6+](https://godotengine.org/download) (standard build) |
 | Daemon | [Node.js](https://nodejs.org) 18+ (no npm packages needed) |
-| Agent | [Claude Code CLI](https://claude.com/claude-code) (`claude --version` ≥ 2.x) |
+| Agent | [Codex CLI](https://developers.openai.com/codex/cli) (`codex --version`) |
 | Shell | Rust toolchain (`cargo`) — or use a browser for the overlay |
 | GPU | Anything Vulkan-capable; verified on GTX 1060 6GB |
 
@@ -342,7 +341,7 @@ Three independent processes: the **daemon** keeps agents running even if renderi
 
 On a **bare machine** it installs everything needed — Git, Node LTS, Rust, the
 **Visual Studio C++ Build Tools** (the Rust linker, and the most common reason a
-build fails), Godot 4.6.3 and the Claude Code CLI — then clones the app to
+build fails), Godot 4.6.3 and the Codex CLI — then clones the app to
 `%LOCALAPPDATA%\BagIdeaOffice` (Windows) or `~/BagIdeaOffice` (macOS), builds the
 shell, brands the window icon, wires the `bagidea` command into your PATH and
 creates a Start Menu shortcut or Bin link. Freshly installed tools are pulled
@@ -358,7 +357,7 @@ irm https://raw.githubusercontent.com/bagidea/bagidea-office/main/installer/inst
 curl -fsSL https://raw.githubusercontent.com/bagidea/bagidea-office/main/installer/install-mac.sh | bash
 ```
 
-> First time only: open a **new** terminal, run `claude` once to log in to Claude,
+> First time only: open a **new** terminal, run `codex login` once to log in to Codex,
 > then `bagidea start`. Safe to re-run — a re-run does a `git pull` and your data is kept.
 > Install didn't finish? See **[troubleshooting → install](docs/guide/troubleshooting.md#แก้ปัญหาการติดตั้ง)**
 > (covers winget, the C++ Build Tools / linker error, PATH, SmartScreen).
@@ -383,12 +382,7 @@ git clone https://github.com/bagidea/bagidea-office.git
 cd bagidea-office
 ```
 
-**1. Fix absolute paths** (one-time): the hook configs reference absolute paths. Update these to your clone location:
-
-- `.claude/settings.json` — 3× path to `daemon\hook.ps1`
-- `workspace/.claude/settings.json` — 1× path to `daemon\perm.ps1`
-
-**2. Build the shell:**
+**1. Build the shell:**
 
 ```powershell
 cd shell
@@ -464,9 +458,9 @@ watch the hand-offs happen on the wallpaper.
 🗣 → pick 2–4 agents + a topic + rounds: they gather in the meeting room and
 discuss over a shared transcript; minutes land on the in-world whiteboard.
 
-### Watch your own Claude Code sessions
-Any Claude Code session inside this project reports its prompts and tool calls
-through hooks — the **Director** works at his desk in real time while you work.
+### Watch office-spawned Codex sessions
+Codex sessions started by the office report prompts, messages and progress back
+to the daemon — the **Director** works at his desk in real time while work runs.
 
 ### Approve dangerous tools
 When a session needs a tool you haven't granted, its character walks to

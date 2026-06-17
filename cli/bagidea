@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// cli/bagidea
 // bagidea — command line for the BagIdea Office.
 // Zero dependencies. Talks to the daemon on :8787; can launch the suite.
 
@@ -251,7 +252,7 @@ async function main() {
     if (rest.includes("-y") || rest.includes("--yes")) return go();
     warn(`This removes BagIdea Office — app files, PATH entry, Start Menu shortcut, autostart`
       + (keepData ? " (your data is backed up first)." : ", AND your data (agents, projects, keys)."));
-    info("It does NOT remove Git / Node / Rust / Claude (shared tools).");
+    info("It does NOT remove Git / Node / Rust / Codex (shared tools).");
     const rl = require("readline").createInterface({ input: process.stdin, output: process.stdout });
     rl.question(`  ${c.warn}Type 'yes' to uninstall:${c.reset} `, (ans) => {
       rl.close();

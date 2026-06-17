@@ -1,3 +1,4 @@
+<!-- daemon/overlay.html -->
 <!doctype html>
 <html lang="en">
 <meta charset="utf-8">
@@ -2421,11 +2422,11 @@
         provbox.appendChild(card);
       };
 
-      // ── Claude (the default brain) — subscription login OR API key, auto-detected.
-      subhead("Claude");
-      const cauth = await fetch("/claude/auth").then((x) => x.json()).catch(() => ({}));
+      // ── Codex (the default brain) — subscription login OR API key, auto-detected.
+      subhead("Codex");
+      const cauth = await fetch("/codex/auth").then((x) => x.json()).catch(() => ({}));
       {
-        const ckey = mainKeys.ANTHROPIC_API_KEY;
+        const ckey = mainKeys.OPENAI_API_KEY;
         const cc = document.createElement("div");
         cc.className = "arow"; cc.style.cursor = "default";
         let statusText, controls;
@@ -2443,9 +2444,9 @@
             <input type="password" placeholder="หรือวาง API key…" autocomplete="new-password" style="flex:0 0 120px;margin:0">
             <div class="winbtn" data-a="savekey" title="ใช้ API key">💾</div>`;
         }
-        cc.innerHTML = `<div class="meta"><b>${cauth.connected ? "✅" : "⚪"} Claude · Anthropic</b>
+        cc.innerHTML = `<div class="meta"><b>${cauth.connected ? "✅" : "⚪"} Codex CLI</b>
             <span class="pstat" style="color:${cauth.connected ? "#4ade80" : "var(--dim)"}">${statusText}</span></div>` + controls;
-        const saveKey = (v) => { if (v) api("/registry/key", { name: "ANTHROPIC_API_KEY", value: v }).then(() => renderConnectTab()); };
+        const saveKey = (v) => { if (v) api("/registry/key", { name: "OPENAI_API_KEY", value: v }).then(() => renderConnectTab()); };
         const revealKeyInput = () => {
           const meta = cc.querySelector(".meta"); cc.innerHTML = ""; cc.appendChild(meta);
           const inp = document.createElement("input");
@@ -2457,18 +2458,18 @@
         cc.querySelectorAll(".winbtn").forEach((btn) => {
           const act = btn.dataset.a;
           if (act === "login") btn.onclick = async () => {
-            await api("/claude/login", {});
+            await api("/codex/login", {});
             cc.querySelector(".pstat").textContent = "เปิดเทอร์มินัลให้ login แล้ว — ทำตามขั้นตอนในหน้าต่างนั้น แล้วกลับมากด 🔄";
           };
           else if (act === "savekey") btn.onclick = () => saveKey(cc.querySelector("input").value.trim());
           else if (act === "usekey" || act === "changekey") btn.onclick = revealKeyInput;
           else if (act === "rmkey") btn.onclick = () =>
-            api("/registry/key", { name: "ANTHROPIC_API_KEY", remove: true }).then(() => renderConnectTab());
+            api("/registry/key", { name: "OPENAI_API_KEY", remove: true }).then(() => renderConnectTab());
         });
         provbox.appendChild(cc);
       }
 
-      // ── Anthropic-compatible (claude talks straight to them)
+      // ── Legacy Anthropic-compatible providers
       subhead("ต่อตรง (Anthropic-compatible)");
       [["glm", "GLM · Z.AI", "z.ai"], ["deepseek", "DeepSeek", "platform.deepseek.com"],
        ["qwen", "Qwen · Alibaba", "Alibaba Model Studio"], ["minimax", "MiniMax", "platform.minimax.io"]]
@@ -2482,7 +2483,7 @@
 
       // ── Custom — add your own (anthropic- or openai-compatible)
       subhead("Custom — เพิ่ม provider เอง");
-      const BUILTIN = new Set(["claude", "glm", "deepseek", "qwen", "minimax", "openai", "gemini", "openrouter", "nvidia", "litellm"]);
+      const BUILTIN = new Set(["codex", "claude", "glm", "deepseek", "qwen", "minimax", "openai", "gemini", "openrouter", "nvidia", "litellm"]);
       Object.keys(pcAll).filter((id) => !BUILTIN.has(id) && pcAll[id] && pcAll[id].label)
         .forEach((id) => providerCard(id, pcAll[id].label + (pcAll[id].kind === "openai" ? " · OpenAI" : " · Anthropic"),
           "", pcAll[id].kind === "openai", true));
@@ -2611,7 +2612,7 @@
       bodyHtml = `<input id="tFilter" class="filterbox" placeholder="🔍 ค้นหาเครื่องมือ / MCP server…">
         <div class="field"><label>⚡ SYSTEM TOOLS — ความสามารถกลางของออฟฟิศ (agents เรียกใช้เองได้)</label>
           <div id="systools"></div></div>
-        <div class="field"><label>🔧 BUILT-IN — เครื่องมือมาตรฐานของ Claude (ลบไม่ได้ · เปิด/ปิดรายตัวในหน้าแก้ไข agent)</label>
+        <div class="field"><label>🔧 BUILT-IN — เครื่องมือมาตรฐานของ Codex (ลบไม่ได้ · เปิด/ปิดรายตัวในหน้าแก้ไข agent)</label>
           <div id="tlist" class="biglist"></div></div>
         <div class="field"><label>🔌 MCP SERVERS — เพิ่มความสามารถใหม่ตามมาตรฐาน MCP</label>
           <div style="font-size:11px;color:var(--dim);margin-bottom:8px">
@@ -2642,7 +2643,7 @@
           <div id="chbox"></div></div>`;
     } else if (tab === "threads") {
       bodyHtml = `<div style="font-size:11px;color:var(--dim);margin-bottom:8px">
-          ความจำสนทนาแยกตามตัว agent — คำสั่งผ่าน CEO จะอยู่กับ Claude (Director)
+          ความจำสนทนาแยกตามตัว agent — คำสั่งผ่าน CEO จะอยู่กับ Codex (Director)
           ส่วนวงประชุม 🗣 ไม่สร้าง thread · ลบ thread = agent ลืมเรื่องนั้น</div>
         <div id="thlist">loading…</div>`;
     } else {
@@ -2920,7 +2921,7 @@
          <option value="2">หัวหน้าทีม (Lead)</option>
          <option value="3">ทีมงาน (Staff)</option>
        </select></div>
-       <div class="field"><label>🧠 สมอง (โมเดล/ผู้ให้บริการ) — ดีฟอลต์คือ Claude</label>
+       <div class="field"><label>🧠 สมอง (โมเดล/ผู้ให้บริการ) — ดีฟอลต์คือ Codex</label>
          <select id="eProvider"></select>
          <div id="eModelWrap" style="position:relative;margin-top:6px">
            <input id="eModel" autocomplete="off" maxlength="60" style="margin:0;width:100%" placeholder="โมเดล (เว้นว่าง = ดีฟอลต์ของผู้ให้บริการ)">
@@ -2930,7 +2931,7 @@
            <span style="color:#ffb054">⚠ ยังไม่ได้เชื่อมต่อ provider นี้</span>
            <button class="send" id="eGoConnect" style="margin-left:6px">🔗 ไปหน้า CONNECT</button>
          </div>
-         <div style="font-size:10.5px;color:var(--dim);margin-top:4px">Claude ใช้ login/แผนเดิม · เจ้าอื่นใช้ key แยก (ประหยัดกว่า)</div>
+         <div style="font-size:10.5px;color:var(--dim);margin-top:4px">Codex ใช้ login/แผนเดิม · เจ้าอื่นใช้ key แยก (ประหยัดกว่า)</div>
        </div>
        <div class="field"><label>✨ PERSONA COPILOT — บอกสั้นๆ ว่าอยากได้ agent แบบไหน (เติมให้ทุกช่อง)</label>
          <div class="assistrow">
@@ -3087,11 +3088,11 @@
     // (untranslated); the token row shows for any non-Claude backend.
     const provSel = modalCard.querySelector("#eProvider");
     if (provSel) {
-      const BUILTIN = [["claude", "Claude · Anthropic"], ["glm", "GLM · Z.AI"],
+      const BUILTIN = [["codex", "Codex CLI"], ["glm", "GLM · Z.AI"],
         ["deepseek", "DeepSeek"], ["qwen", "Qwen · Alibaba"], ["minimax", "MiniMax"],
         ["openai", "OpenAI · proxy"], ["gemini", "Gemini · proxy"],
         ["openrouter", "OpenRouter · proxy"], ["nvidia", "NVIDIA · proxy"]];
-      const MODELS = { claude: ["", "opus", "sonnet", "haiku"], glm: ["glm-4.6", "glm-4.5"],
+      const MODELS = { codex: ["", "gpt-5", "gpt-5-codex", "o4-mini"], glm: ["glm-4.6", "glm-4.5"],
         deepseek: ["deepseek-v4-pro", "deepseek-v4-flash"],
         qwen: ["qwen3-coder-plus", "qwen3-coder-next", "qwen3-coder-flash"],
         minimax: ["MiniMax-M3"], openai: ["gpt-4o", "gpt-4o-mini"],
@@ -3111,7 +3112,7 @@
         const customs = Object.keys(pcAll).filter((id) => !BSET.has(id) && pcAll[id] && pcAll[id].label)
           .map((id) => [id, pcAll[id].label + " · custom"]);
         provSel.innerHTML = BUILTIN.concat(customs).map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
-        provSel.value = a.provider || "claude";
+        provSel.value = a.provider || "codex";
       };
       // Themed combobox: suggestions filtered by what's typed; click to pick, or type freely.
       const showMenu = () => {
@@ -3130,7 +3131,7 @@
       modelInput.onblur = () => setTimeout(() => modelMenu.classList.remove("open"), 150);
       const renderModels = (provChanged) => {
         const p = provSel.value;
-        const connected = p === "claude" ? true : !!(pcAll[p] && pcAll[p].connected);
+        const connected = p === "codex" ? true : !!(pcAll[p] && pcAll[p].connected);
         // Can't save an agent onto a provider that isn't connected yet.
         if (saveBtn) { saveBtn.disabled = !connected; saveBtn.title = connected ? "" : tr("⚠ ยังไม่ได้เชื่อมต่อ provider นี้"); }
         if (!connected) { warn.style.display = "block"; modelWrap.style.display = "none"; return; }
@@ -3146,8 +3147,8 @@
         curModels = [...stat, ...usable.filter((m) => !stat.includes(m))];
         // Keep the saved model on the agent's own provider; otherwise pre-select a
         // sensible default (first usable model) so the field is never left invalid.
-        const def = p === "claude" ? "" : (curModels.find(Boolean) || "");
-        modelInput.value = (!provChanged && a.model && p === (a.provider || "claude")) ? a.model : def;
+        const def = p === "codex" ? "" : (curModels.find(Boolean) || "");
+        modelInput.value = (!provChanged && a.model && p === (a.provider || "codex")) ? a.model : def;
       };
       buildProviderOptions();
       provSel.onchange = () => renderModels(true);
@@ -3195,7 +3196,7 @@
             prompt: modalCard.querySelector("#ePrompt").value,
             tier: Number(modalCard.querySelector("#eTier").value) || 3,
             voice: (modalCard.querySelector("#eVoice") || {}).value || "",
-            provider: (modalCard.querySelector("#eProvider") || {}).value || "claude",
+            provider: (modalCard.querySelector("#eProvider") || {}).value || "codex",
             model: (modalCard.querySelector("#eModel") || {}).value || "",
             persona: {
               expertise: modalCard.querySelector("#eExpertise").value,
@@ -3606,7 +3607,7 @@
         ${(() => { const g = (today.aux && today.aux.gemini) || 0, o = (today.aux && today.aux.openai) || 0, c = today.cost || 0;
           const brains = today.brains || {};
           const bTotal = Object.values(brains).reduce((s, b) => s + (b.cost || 0), 0);
-          return card("💰", "Claude วันนี้", "$" + c.toFixed(2), "ค่าจริงจาก Claude API")
+          return card("💰", "Codex วันนี้", "$" + c.toFixed(2), "ค่าจริง/ประมาณการจาก Codex")
             + card("🧠", "สมองอื่นๆ วันนี้", "≈ $" + bTotal.toFixed(3), "ประมาณการจาก token (GLM/OpenAI/Gemini…)")
             + card("✨", "Gemini (TTS/ภาพ)", "≈ $" + g.toFixed(3), "ประมาณการ TTS/ภาพ/แปล")
             + card("🤖", "OpenAI (เสียง/ภาพ)", "≈ $" + o.toFixed(3), "ประมาณการ เสียง/ภาพ")
@@ -3766,7 +3767,7 @@
             : !p.open
             ? `<div class="winbtn" title="เปิดโปรเจค (เลือก session ให้เองอัตโนมัติ)">▶</div>`
             : p.visible
-              ? `<div class="winbtn" title="ซ่อนหน้าต่าง — claude ทำงานต่อเบื้องหลัง">🫥</div>
+              ? `<div class="winbtn" title="ซ่อนหน้าต่าง — Codex ทำงานต่อเบื้องหลัง">🫥</div>
                  <div class="winbtn" title="ปิดจริง (จบการทำงานของหน้าต่างนี้)">⏹</div>`
               : `<div class="winbtn" title="Resume — เรียกหน้าต่างเดิมกลับมา">▶</div>
                  <div class="winbtn" title="ปิดจริง (จบการทำงานเบื้องหลัง)">⏹</div>`;

@@ -10,9 +10,9 @@
 
 ## Product Summary
 
-BagIdea Office is a living 2.5D AI office that runs as a desktop wallpaper. It visualizes real Claude Code and agent work as pixel-art office employees with desks, rooms, meetings, approvals, tasks, skills, plugins, memory, voice, and channel integrations. The product should feel like a world with social agent presence, not a generic dashboard or chat window.
+BagIdea Office is a living 2.5D AI office that runs as a desktop wallpaper. It visualizes real Codex CLI and agent work as pixel-art office employees with desks, rooms, meetings, approvals, tasks, skills, plugins, memory, voice, and channel integrations. The product should feel like a world with social agent presence, not a generic dashboard or chat window.
 
-The full experience depends on Claude Code. Gemini and OpenAI keys unlock voice, realtime calls, image generation, and richer agent capabilities. The current README describes BagIdea Office as a working product for Windows 11, with macOS support in beta.
+The agent runtime now depends on Codex CLI. Gemini and OpenAI keys unlock voice, realtime calls, image generation, and richer agent capabilities. The current README describes BagIdea Office as a working product for Windows 11, with macOS support in beta.
 
 ## Main Architecture
 
@@ -34,10 +34,10 @@ The full experience depends on Claude Code. Gemini and OpenAI keys unlock voice,
 - The Godot world should reflect real daemon events. Avoid fake live state unless clearly part of a simulation or demo tool.
 - The Ghost Deck represents sub-agent parallel work.
 - Security/permission approval is spatialized in-world and mirrored through the overlay.
-- Projects are real folders where agents can work through Claude Code sessions.
+- Projects are real folders where agents can work through Codex CLI sessions.
 - Plugins can add UI panels, server routes, commands, and private storage.
 - Channels include Telegram, Discord, and LINE.
-- Model/provider routing includes Claude, GLM, DeepSeek, Qwen, MiniMax, OpenAI, Gemini, OpenRouter, NVIDIA, and custom providers through direct or proxy modes.
+- The default agent engine is Codex CLI. Legacy provider metadata for Claude, GLM, DeepSeek, Qwen, MiniMax, OpenAI, Gemini, OpenRouter, NVIDIA, and custom providers may still exist for compatibility and UI history.
 
 ## Common Run Commands From README
 
