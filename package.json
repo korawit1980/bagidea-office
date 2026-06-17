@@ -1,0 +1,16 @@
+{
+  "name": "bagidea-office",
+  "version": "0.8.0",
+  "private": true,
+  "description": "A living 2.5D AI office that runs as your desktop wallpaper.",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "dev": "node daemon/server.js",
+    "start": "node daemon/server.js",
+    "simulate:task": "node daemon/send.js task.started rin",
+    "simulate:permission": "node daemon/send.js perm.requested rin"
+  }
+}
