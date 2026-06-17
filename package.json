@@ -13,6 +13,9 @@
     "dev:overlay": "node daemon/server.js",
     "dev:world": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev-world.ps1",
     "dev:windowed": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev-windowed.ps1",
+    "codex:login": "codex login",
+    "codex:login:oauth": "codex login",
+    "codex:status": "codex login status",
     "start": "node daemon/server.js",
     "simulate:task": "node daemon/send.js task.started rin",
     "simulate:permission": "node daemon/send.js perm.requested rin"
