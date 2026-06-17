@@ -95,6 +95,24 @@ npm run dev
 รัน daemon แบบ development ผ่าน Node.js
 
 ```powershell
+npm run dev:web
+```
+
+รัน daemon และ overlay web ที่ `http://127.0.0.1:8787` สำหรับทดสอบ API, CLI และ agents ผ่าน Codex CLI
+
+```powershell
+npm run dev:world
+```
+
+เปิด Godot world แบบ windowed โดยไม่ฝังเป็น wallpaper ต้องมี daemon ทำงานอยู่ถ้าต้องการเห็น live events
+
+```powershell
+npm run dev:windowed
+```
+
+เปิด daemon และ Godot world แบบ windowed พร้อมกันสำหรับทดสอบ agents + office world โดยยังไม่ใช้ Rust shell หรือ wallpaper embedding
+
+```powershell
 node daemon\server.js
 ```
 
