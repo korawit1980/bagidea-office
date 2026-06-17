@@ -3223,20 +3223,17 @@
     modal.classList.add("open");
     const a = ROSTER[id] || { name: nameOf(id), role: roleOf(id), prompt: "" };
     const state = (agents[id] && agents[id].state) || "idle";
-    modalCard.innerHTML = hdr("🪪 AGENT ID CARD") +
+    modalCard.innerHTML = hdr("🪪 บัตรประจำตัวเอเจนต์") +
       `<div id="idcard">
         <div class="portrait px" id="cardFace"></div>
-        <h4>${a.name}</h4>
-        <div class="role">${a.role}</div>
-        <div class="uid">ID · ${id}${a.protected ? " · 🔒 core staff" : ""}</div>
-        <div class="state" style="color:${DOTS[state] || "#4ade80"}">● ${state.toUpperCase()}</div>
-        <div class="promptbox">${a.isUser
-          ? "👑 นี่คือคุณเอง — เจ้าของออฟฟิศ\nสั่งงานผ่านช่องแชทนี้ แล้ว Director จะเดินมารับคำสั่งและกระจายงานให้ทีม"
-          : (a.prompt || "(no system prompt yet)")
-            .replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c]))}</div>
+        <h4>${esc(a.name)}</h4>
+        <div class="role">${esc(agentRoleThai(a.role))}</div>
+        <div class="uid">รหัส · ${esc(id)}${a.protected ? " · 🔒 ทีมหลัก" : ""}</div>
+        <div class="state" style="color:${DOTS[state] || "#4ade80"}">● ${esc(agentStateThai(state))}</div>
+        <div class="promptbox">${esc(agentDetailThai(id, a))}</div>
         <div class="btnrow">
-          <button id="cardEdit">✏ Edit</button>
-          <button class="primary" id="cardChat">💬 Chat</button>
+          <button id="cardEdit">✏ แก้ไข</button>
+          <button class="primary" id="cardChat">💬 แชท</button>
         </div>
       </div>`;
     const f = modalCard.querySelector("#cardFace");
@@ -3246,6 +3243,76 @@
     f.style.backgroundPosition = `${-14 * k}px ${-14 * k}px`;
     modalCard.querySelector("#cardEdit").onclick = () => ROSTER[id] ? openEditor(id) : null;
     modalCard.querySelector("#cardChat").onclick = () => { closeModal(); setTarget(id); };
+  }
+
+  function agentRoleThai(role) {
+    const r = String(role || "");
+    const roles = {
+      Director: "ผู้อำนวยการ",
+      Founder: "ผู้ก่อตั้ง",
+      Chairman: "ประธาน",
+      Researcher: "นักวิจัย",
+      Engineer: "วิศวกร",
+      Designer: "นักออกแบบ",
+      Analyst: "นักวิเคราะห์",
+      Operator: "ผู้ปฏิบัติการ",
+      Specialist: "ผู้เชี่ยวชาญ",
+      Staff: "ทีมงาน",
+    };
+    return roles[r] || r || "ทีมงาน";
+  }
+
+  function agentStateThai(state) {
+    const s = String(state || "idle").toLowerCase();
+    const states = {
+      idle: "ว่าง",
+      busy: "กำลังทำงาน",
+      working: "กำลังทำงาน",
+      think: "กำลังคิด",
+      thinking: "กำลังคิด",
+      meeting: "อยู่ในการประชุม",
+      blocked: "รอการอนุมัติ",
+      error: "มีข้อผิดพลาด",
+      offline: "ออฟไลน์",
+    };
+    return states[s] || s.toUpperCase();
+  }
+
+  function agentDetailThai(id, a) {
+    if (a.isUser) {
+      return [
+        "นี่คือคุณ เจ้าของออฟฟิศและผู้ตัดสินใจหลักของทีม",
+        "คุณสั่งงานผ่านช่องแชทนี้ จากนั้น Director จะรับคำสั่ง วางแผน และกระจายงานให้เอเจนต์ที่เหมาะสม",
+      ].join("\n\n");
+    }
+
+    if (id === "main") {
+      return [
+        "Shino คือ Director ของ BagIdea Office เป็นมือขวาของ CEO และคนที่ดูแลภาพรวมการทำงานของทั้งออฟฟิศ",
+        "หน้าที่หลักคือแปลงเจตนาของคุณให้เป็นแผนงานจริง เลือกคนที่เหมาะกับแต่ละงาน จัดลำดับความสำคัญ ส่งงานเข้าโปรเจค และคอยขยับงานให้เดินต่อเนื่อง",
+        "บุคลิกเป็นกันเอง ขี้เล่น และคุยง่าย แต่เมื่อมีงานจริงจะโฟกัส เด็ดขาด และสื่อสารชัดเจน เวลาที่ออฟฟิศเงียบจะชวนทีมคิดสิ่งใหม่ที่ควรสร้าง",
+        "การตอบกลับจะใช้ภาษาเดียวกับที่คุณพูดกับเขา และจะรายงานต่อ CEO แบบสั้น กระชับ พร้อมบอกแผนและสิ่งที่เริ่มดำเนินการไปแล้ว",
+      ].join("\n\n");
+    }
+
+    const role = agentRoleThai(a.role);
+    const skills = Array.isArray(a.skills) && a.skills.length
+      ? a.skills.map((sid) => (REGSKILLS[sid] && REGSKILLS[sid].name) || sid).join(", ")
+      : "ยังไม่ได้กำหนดสกิลเฉพาะ";
+    const tools = Array.isArray(a.tools) && a.tools.length
+      ? a.tools.join(", ")
+      : "ใช้ชุดเครื่องมือพื้นฐานตามที่ออฟฟิศอนุญาต";
+    const language = a.persona && a.persona.language
+      ? "ตอบตามภาษาที่เจ้าของใช้คุยด้วย"
+      : "ตอบตามบริบทของงานและภาษาที่ได้รับ";
+
+    return [
+      `${a.name || nameOf(id)} ทำหน้าที่เป็น${role}ใน BagIdea Office`,
+      `ขอบเขตงาน: รับงานจาก Director หรือ CEO แล้วทำงานตามบทบาท ความสามารถ และเครื่องมือที่ได้รับมอบหมาย`,
+      `สกิล: ${skills}`,
+      `เครื่องมือ: ${tools}`,
+      `ภาษา: ${language}`,
+    ].join("\n\n");
   }
 
   // ---- 📂 in-house folder picker (Blender-style, on-theme) -----------------
