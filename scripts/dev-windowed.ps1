@@ -12,6 +12,7 @@ if ($env:BAGIDEA_GODOT) { $Candidates += $env:BAGIDEA_GODOT }
 $Candidates += @(
   "godot",
   "godot.exe",
+  "D:\Software\Dev\Godot_v4.6.3-stable_win64.exe",
   "E:\Tools\Godot\Godot_v4.6.3-stable_win64.exe",
   "C:\Program Files\Godot\Godot.exe",
   "C:\Program Files\Godot\godot.exe",

@@ -11,6 +11,7 @@ if ($env:BAGIDEA_GODOT) { $Candidates += $env:BAGIDEA_GODOT }
 $Candidates += @(
   "godot",
   "godot.exe",
+  "D:\Software\Dev\Godot_v4.6.3-stable_win64.exe",
   "E:\Tools\Godot\Godot_v4.6.3-stable_win64.exe",
   "C:\Program Files\Godot\Godot.exe",
   "C:\Program Files\Godot\godot.exe",
@@ -31,7 +32,7 @@ Godot executable was not found.
 Install Godot 4.6+, add it to PATH, or set BAGIDEA_GODOT to the full executable path.
 
 Example:
-  `$env:BAGIDEA_GODOT = "E:\Tools\Godot\Godot_v4.6.3-stable_win64.exe"
+  `$env:BAGIDEA_GODOT = "D:\Software\Dev\Godot_v4.6.3-stable_win64.exe"
   npm run dev:world
 "@
 }

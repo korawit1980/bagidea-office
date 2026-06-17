@@ -104,7 +104,7 @@ npm run dev:web
 npm run dev:world
 ```
 
-เปิด Godot world แบบ windowed โดยไม่ฝังเป็น wallpaper ต้องมี daemon ทำงานอยู่ถ้าต้องการเห็น live events ถ้าเครื่องไม่มี `godot` ใน PATH ให้ตั้ง `BAGIDEA_GODOT` เป็น path เต็มของ Godot executable ก่อนรันคำสั่งนี้
+เปิด Godot world แบบ windowed โดยไม่ฝังเป็น wallpaper ต้องมี daemon ทำงานอยู่ถ้าต้องการเห็น live events script จะลองหา Godot จาก `D:\Software\Dev\Godot_v4.6.3-stable_win64.exe` และ path ทั่วไปอื่น ๆ ถ้าเครื่องไม่มี `godot` ใน PATH ให้ตั้ง `BAGIDEA_GODOT` เป็น path เต็มของ Godot executable ก่อนรันคำสั่งนี้
 
 ```powershell
 npm run dev:windowed
