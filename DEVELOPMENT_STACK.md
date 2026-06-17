@@ -104,13 +104,13 @@ npm run dev:web
 npm run dev:world
 ```
 
-เปิด Godot world แบบ windowed โดยไม่ฝังเป็น wallpaper ต้องมี daemon ทำงานอยู่ถ้าต้องการเห็น live events
+เปิด Godot world แบบ windowed โดยไม่ฝังเป็น wallpaper ต้องมี daemon ทำงานอยู่ถ้าต้องการเห็น live events ถ้าเครื่องไม่มี `godot` ใน PATH ให้ตั้ง `BAGIDEA_GODOT` เป็น path เต็มของ Godot executable ก่อนรันคำสั่งนี้
 
 ```powershell
 npm run dev:windowed
 ```
 
-เปิด daemon และ Godot world แบบ windowed พร้อมกันสำหรับทดสอบ agents + office world โดยยังไม่ใช้ Rust shell หรือ wallpaper embedding
+เปิด daemon และ Godot world แบบ windowed พร้อมกันสำหรับทดสอบ agents + office world โดยยังไม่ใช้ Rust shell หรือ wallpaper embedding ใช้ `BAGIDEA_GODOT` เช่นเดียวกับ `dev:world` ถ้า Godot ไม่อยู่ใน PATH
 
 ```powershell
 node daemon\server.js

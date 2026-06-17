@@ -11,7 +11,7 @@
     "dev": "node daemon/server.js",
     "dev:web": "node daemon/server.js",
     "dev:overlay": "node daemon/server.js",
-    "dev:world": "godot --path godot",
+    "dev:world": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev-world.ps1",
     "dev:windowed": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev-windowed.ps1",
     "start": "node daemon/server.js",
     "simulate:task": "node daemon/send.js task.started rin",
